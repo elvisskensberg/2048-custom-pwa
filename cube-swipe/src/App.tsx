@@ -8,6 +8,7 @@ import { BackButton } from './components/BackButton'
 import { ThemeToggle } from './components/ThemeToggle'
 import { GameBoard } from './components/GameBoard'
 import { FeedbackDialog } from './components/FeedbackDialog'
+import { testGoogleScriptAPI } from './utils/testGoogleScript'
 
 // Google Apps Script endpoint for form submissions
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx5cPbNkM1kKZ7DANj7Ql4OWguS7shXwCabdpXWmNtBbr1YaOsp1r6lukCfHgoGRLfLXw/exec"
@@ -53,6 +54,15 @@ function App() {
   // Track device info on mount
   useEffect(() => {
     trackDeviceInfo()
+  }, [])
+
+  // Expose test function in development mode
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      // @ts-expect-error - Expose to window for testing in console
+      window.testGoogleScriptAPI = testGoogleScriptAPI
+      console.log('🧪 Test function available: window.testGoogleScriptAPI()')
+    }
   }, [])
 
   const toggleTheme = () => {
