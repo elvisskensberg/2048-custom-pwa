@@ -12,6 +12,16 @@ vi.mock('../InstallPrompt', () => ({
   InstallPrompt: () => null,
 }))
 
+// Mock analytics functions
+vi.mock('../analytics', () => ({
+  trackEvent: vi.fn(),
+  trackException: vi.fn(),
+  trackMetric: vi.fn(),
+  trackPageView: vi.fn(),
+  trackDeviceInfo: vi.fn(),
+  getDeviceInfo: vi.fn(() => ({})),
+}))
+
 // Mock static assets
 vi.mock('/vite.svg', () => ({ default: 'mocked-vite-logo.svg' }))
 vi.mock('*.svg', () => ({ default: 'mocked-logo.svg' }))

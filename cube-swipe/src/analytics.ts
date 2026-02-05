@@ -57,4 +57,53 @@ export const trackPageView = (name?: string, properties?: Record<string, unknown
   }
 };
 
+// Collect device information for analytics
+export const getDeviceInfo = () => {
+  const userAgent = navigator.userAgent;
+
+  // Detect device type
+  const isMobile = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  const isTablet = /iPad|Android(?!.*Mobile)/i.test(userAgent);
+
+  // Detect OS
+  let os = 'Unknown';
+  if (/Windows/i.test(userAgent)) os = 'Windows';
+  else if (/Mac OS X/i.test(userAgent)) os = 'macOS';
+  else if (/Linux/i.test(userAgent)) os = 'Linux';
+  else if (/Android/i.test(userAgent)) os = 'Android';
+  else if (/iOS|iPhone|iPad|iPod/i.test(userAgent)) os = 'iOS';
+
+  // Detect browser
+  let browser = 'Unknown';
+  if (/Chrome/i.test(userAgent) && !/Edge|Edg/i.test(userAgent)) browser = 'Chrome';
+  else if (/Safari/i.test(userAgent) && !/Chrome/i.test(userAgent)) browser = 'Safari';
+  else if (/Firefox/i.test(userAgent)) browser = 'Firefox';
+  else if (/Edge|Edg/i.test(userAgent)) browser = 'Edge';
+
+  // Check standalone mode safely
+  const isStandalone = typeof window.matchMedia === 'function'
+    ? window.matchMedia('(display-mode: standalone)').matches
+    : false;
+
+  return {
+    deviceType: isTablet ? 'Tablet' : isMobile ? 'Mobile' : 'Desktop',
+    os,
+    browser,
+    screenWidth: window.screen.width,
+    screenHeight: window.screen.height,
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight,
+    pixelRatio: window.devicePixelRatio,
+    touchSupport: 'ontouchstart' in window,
+    orientation: window.screen.orientation?.type || 'unknown',
+    isStandalone,
+  };
+};
+
+// Track device info on app load
+export const trackDeviceInfo = () => {
+  const deviceInfo = getDeviceInfo();
+  trackEvent('DeviceInfo_Load', deviceInfo);
+};
+
 export default appInsights;
