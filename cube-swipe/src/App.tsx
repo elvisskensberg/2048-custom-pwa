@@ -2,12 +2,12 @@ import { useState, useEffect, useMemo } from 'react'
 import { Button, Box, Typography, ThemeProvider, createTheme, Stack } from '@mui/material'
 import './App.css'
 import { usePWAInstallTracking } from './usePWAInstallTracking'
-import { InstallPrompt } from './InstallPrompt'
 import { trackDeviceInfo } from './analytics'
 import { BackButton } from './components/BackButton'
 import { ThemeToggle } from './components/ThemeToggle'
 import { GameBoard } from './components/GameBoard'
 import { LeaveCommentForm } from './components/LeaveCommentForm'
+import { AboutSection } from './components/AboutSection'
 import { testGoogleScriptAPI } from './utils/testGoogleScript'
 
 function App() {
@@ -21,6 +21,7 @@ function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light')
+  const [isAppInstalled, setIsAppInstalled] = useState(false)
 
   // Create Material Design 3 theme based on mode
   const theme = useMemo(
@@ -45,6 +46,25 @@ function App() {
   // Track device info on mount
   useEffect(() => {
     trackDeviceInfo()
+  }, [])
+
+  // Check if app is already installed
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return
+    }
+
+    try {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      const isIOSStandalone = (window.navigator as unknown as { standalone?: boolean }).standalone === true
+
+      if (isStandalone || isIOSStandalone) {
+        // Use a microtask to avoid setting state during render
+        Promise.resolve().then(() => setIsAppInstalled(true))
+      }
+    } catch {
+      // Ignore errors in test environments
+    }
   }, [])
 
   // Expose test function in development mode
@@ -192,64 +212,53 @@ function App() {
               Leave Comment
             </Button>
             <Button
-              variant="outlined"
+              variant="contained"
               fullWidth
               onClick={handleShare}
               sx={{
-                py: 1.2,
-                fontSize: '0.95rem',
+                py: 1.5,
+                fontSize: '1rem',
                 textTransform: 'none',
+                background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 4px 12px rgba(245, 87, 108, 0.4)',
+                },
               }}
             >
               Share
             </Button>
-            <Button
-              variant="outlined"
-              fullWidth
-              onClick={handleInstall}
-              sx={{
-                py: 1.2,
-                fontSize: '0.95rem',
-                textTransform: 'none',
-              }}
-            >
-              Install The App
-            </Button>
+            {!isAppInstalled && (
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={handleInstall}
+                sx={{
+                  py: 1.5,
+                  fontSize: '1rem',
+                  textTransform: 'none',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
+                  },
+                }}
+              >
+                Install The App
+              </Button>
+            )}
           </Stack>
         ) : aboutOpen ? (
-          <Box sx={{ maxWidth: 600, textAlign: 'center', px: 2 }}>
-            <Typography variant="h5" gutterBottom sx={{ mb: 3, color: 'text.primary' }}>
-              About Cube Swipe 2048
-            </Typography>
-            <Typography variant="body1" paragraph sx={{ mb: 2, color: 'text.primary' }}>
-              Cube Swipe 2048 is a modern take on the classic 2048 puzzle game.
-              Swipe in any direction to move the tiles and combine matching numbers.
-              The goal is to reach the 2048 tile!
-            </Typography>
-            <Typography variant="body1" paragraph sx={{ mb: 3, color: 'text.primary' }}>
-              Built with React, Material Design 3, and PWA technology for a seamless
-              experience across all devices. Install it on your device for offline play!
-            </Typography>
-            <Button
-              variant="contained"
-              onClick={closeAbout}
-              sx={{
-                px: 4,
-                py: 1.5,
-                fontSize: '1rem',
-                textTransform: 'none',
-              }}
-            >
-              Back
-            </Button>
-          </Box>
+          <AboutSection onClose={closeAbout} />
         ) : commentsOpen ? (
           <LeaveCommentForm onClose={closeComments} />
         ) : (
           <GameBoard grid={grid} onSwipe={handleSwipe} />
         )}
-
-        <InstallPrompt />
 
         <Typography
           variant="caption"
@@ -260,7 +269,7 @@ function App() {
             fontSize: '0.75rem'
           }}
         >
-          v0.02
+          v0.03
         </Typography>
       </Box>
     </ThemeProvider>
