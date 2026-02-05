@@ -26,6 +26,7 @@ function App() {
     [0, 0, 0, 0],
     [0, 0, 0, 0],
   ])
+  const [gameStarted, setGameStarted] = useState(false)
 
   // Track PWA installation events
   usePWAInstallTracking()
@@ -34,6 +35,10 @@ function App() {
   useEffect(() => {
     trackDeviceInfo()
   }, [])
+
+  const startGame = () => {
+    setGameStarted(true)
+  }
 
   const handleSwipe = (direction: 'left' | 'right' | 'up' | 'down') => {
     console.log('Swipe detected:', direction)
@@ -80,45 +85,61 @@ function App() {
           Cube Swipe 2048
         </Typography>
 
-        <Box
-          {...bind()}
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: 2,
-            maxWidth: 500,
-            width: '100%',
-            touchAction: 'none',
-            userSelect: 'none',
-          }}
-        >
-          {grid.map((row, rowIndex) =>
-            row.map((cell, colIndex) => (
-              <Button
-                key={`${rowIndex}-${colIndex}`}
-                variant="contained"
-                disableRipple
-                sx={{
-                  aspectRatio: '1',
-                  minHeight: 80,
-                  fontSize: '1.5rem',
-                  fontWeight: 'bold',
-                  bgcolor: cell > 0 ? `hsl(${cell * 30}, 70%, 60%)` : 'grey.300',
-                  pointerEvents: 'none',
-                  '&:hover': {
-                    bgcolor: cell > 0 ? `hsl(${cell * 30}, 70%, 60%)` : 'grey.300',
-                  },
-                }}
-              >
-                {cell > 0 ? cell : ''}
-              </Button>
-            ))
-          )}
-        </Box>
+        {!gameStarted ? (
+          <Button
+            variant="contained"
+            size="large"
+            onClick={startGame}
+            sx={{
+              px: 6,
+              py: 2,
+              fontSize: '1.2rem',
+              textTransform: 'none',
+            }}
+          >
+            Start Game
+          </Button>
+        ) : (
+          <>
+            <Box
+              {...bind()}
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: 2,
+                maxWidth: 500,
+                width: '100%',
+                touchAction: 'none',
+                userSelect: 'none',
+              }}
+            >
+              {grid.map((row, rowIndex) =>
+                row.map((cell, colIndex) => (
+                  <Button
+                    key={`${rowIndex}-${colIndex}`}
+                    variant="contained"
+                    disableRipple
+                    sx={{
+                      aspectRatio: '1',
+                      minHeight: 80,
+                      fontSize: '1.5rem',
+                      fontWeight: 'bold',
+                      bgcolor: cell > 0 ? `hsl(${cell * 30}, 70%, 60%)` : 'grey.300',
+                      pointerEvents: 'none',
+                      cursor: 'default',
+                    }}
+                  >
+                    {cell > 0 ? cell : ''}
+                  </Button>
+                ))
+              )}
+            </Box>
 
-        <Typography variant="body2" sx={{ mt: 4, color: 'text.secondary' }}>
-          Swipe left, right, up, or down to play
-        </Typography>
+            <Typography variant="body2" sx={{ mt: 4, color: 'text.secondary' }}>
+              Swipe left, right, up, or down to play
+            </Typography>
+          </>
+        )}
 
         <InstallPrompt />
       </Box>
