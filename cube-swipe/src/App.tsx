@@ -6,6 +6,9 @@ import { usePWAInstallTracking } from './usePWAInstallTracking'
 import { InstallPrompt } from './InstallPrompt'
 import { trackDeviceInfo } from './analytics'
 
+// Google Apps Script endpoint for form submissions
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwSIH1RDulC7fm0TU6EtMO8i4jzPNzKOFbp2SGRI6R0aZ1sBOIfsTp6yLpOOYh3gQe3/exec"
+
 // Create Material Design 3 theme
 const theme = createTheme({
   palette: {
@@ -64,12 +67,33 @@ function App() {
     setCommentsOpen(false)
   }
 
-  const handleSubmitComment = () => {
-    // TODO: Implement comment submission logic
-    console.log('Comment submitted:', { contactInfo, comment })
-    setContactInfo('')
-    setComment('')
-    closeComments()
+  const handleSubmitComment = async () => {
+    try {
+      // Format the data for Google Apps Script
+      const searchParams = new URLSearchParams()
+      searchParams.append('contact', contactInfo)
+      searchParams.append('comment', comment)
+      searchParams.append('timestamp', new Date().toISOString())
+
+      // Submit to Google Apps Script endpoint
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: searchParams,
+        mode: 'no-cors' // Crucial for Google Apps Script redirects
+      })
+
+      // Note: With 'no-cors', we can't read the response body,
+      // but we can assume success if no error is thrown.
+      alert('Thank you for your feedback! Your comment has been submitted.')
+
+      // Clear form and close
+      setContactInfo('')
+      setComment('')
+      closeComments()
+    } catch (error) {
+      console.error('Submission failed:', error)
+      alert('Sorry, there was an error submitting your comment. Please try again.')
+    }
   }
 
   const handleSwipe = (direction: 'left' | 'right' | 'up' | 'down') => {
