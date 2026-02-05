@@ -1,13 +1,30 @@
 import { useState, useEffect } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import { Button, Box, Typography, ThemeProvider, createTheme } from '@mui/material'
 import './App.css'
 import { usePWAInstallTracking } from './usePWAInstallTracking'
 import { InstallPrompt } from './InstallPrompt'
 import { trackDeviceInfo } from './analytics'
 
+// Create Material Design 3 theme
+const theme = createTheme({
+  palette: {
+    mode: 'light',
+    primary: {
+      main: '#6750A4',
+    },
+    secondary: {
+      main: '#625B71',
+    },
+  },
+})
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [grid, setGrid] = useState<number[][]>([
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ])
 
   // Track PWA installation events
   usePWAInstallTracking()
@@ -17,30 +34,69 @@ function App() {
     trackDeviceInfo()
   }, [])
 
+  const handleCellClick = (row: number, col: number) => {
+    const newGrid = grid.map((r, i) =>
+      r.map((cell, j) => (i === row && j === col ? cell + 1 : cell))
+    )
+    setGrid(newGrid)
+  }
+
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React by Elvis 01</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-      <InstallPrompt />
-    </>
+    <ThemeProvider theme={theme}>
+      <Box
+        sx={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: 'background.default',
+          padding: 3,
+        }}
+      >
+        <Typography variant="h3" component="h1" gutterBottom sx={{ mb: 4 }}>
+          Cube Swipe 2048
+        </Typography>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: 2,
+            maxWidth: 500,
+            width: '100%',
+          }}
+        >
+          {grid.map((row, rowIndex) =>
+            row.map((cell, colIndex) => (
+              <Button
+                key={`${rowIndex}-${colIndex}`}
+                variant="contained"
+                onClick={() => handleCellClick(rowIndex, colIndex)}
+                sx={{
+                  aspectRatio: '1',
+                  minHeight: 80,
+                  fontSize: '1.5rem',
+                  fontWeight: 'bold',
+                  bgcolor: cell > 0 ? `hsl(${cell * 30}, 70%, 60%)` : 'grey.300',
+                  '&:hover': {
+                    bgcolor: cell > 0 ? `hsl(${cell * 30}, 70%, 50%)` : 'grey.400',
+                  },
+                }}
+              >
+                {cell > 0 ? cell : ''}
+              </Button>
+            ))
+          )}
+        </Box>
+
+        <Typography variant="body2" sx={{ mt: 4, color: 'text.secondary' }}>
+          Click tiles to increment values
+        </Typography>
+
+        <InstallPrompt />
+      </Box>
+    </ThemeProvider>
   )
 }
 
