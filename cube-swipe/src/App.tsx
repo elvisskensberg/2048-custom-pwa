@@ -98,7 +98,8 @@ function App() {
     <ThemeProvider theme={theme}>
       <Box
         sx={{
-          height: '100vh',
+          minHeight: '100vh',
+          maxHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -106,14 +107,14 @@ function App() {
           bgcolor: 'background.default',
           padding: { xs: 2, sm: 3 },
           position: 'relative',
-          overflow: 'auto',
+          overflow: 'hidden',
         }}
       >
         {gameStarted && <BackButton onClick={goBack} />}
 
         <ThemeToggle themeMode={themeMode} onToggle={toggleTheme} />
 
-        <Typography variant="h3" component="h1" gutterBottom sx={{ mb: 4 }}>
+        <Typography variant="h3" component="h1" gutterBottom sx={{ mb: 4, color: 'text.primary' }}>
           Cube Swipe 2048
         </Typography>
 

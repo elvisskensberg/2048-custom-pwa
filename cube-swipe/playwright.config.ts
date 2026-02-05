@@ -38,7 +38,7 @@ export default defineConfig({
       },
     },
     {
-      name: 'Samsung Galaxy Tab S10',
+      name: 'Galaxy Tab S10',
       use: {
         ...devices['Galaxy Tab S4'], // Base Android tablet
         viewport: { width: 800, height: 1280 },
