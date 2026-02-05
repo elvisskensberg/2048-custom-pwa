@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Button, Box, Typography, ThemeProvider, createTheme, TextField, Stack } from '@mui/material'
+import { useState, useEffect, useMemo } from 'react'
+import { Button, Box, Typography, ThemeProvider, createTheme, TextField, Stack, IconButton } from '@mui/material'
 import { useGesture } from '@use-gesture/react'
 import './App.css'
 import { usePWAInstallTracking } from './usePWAInstallTracking'
@@ -8,19 +8,6 @@ import { trackDeviceInfo } from './analytics'
 
 // Google Apps Script endpoint for form submissions
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwSIH1RDulC7fm0TU6EtMO8i4jzPNzKOFbp2SGRI6R0aZ1sBOIfsTp6yLpOOYh3gQe3/exec"
-
-// Create Material Design 3 theme
-const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#6750A4',
-    },
-    secondary: {
-      main: '#625B71',
-    },
-  },
-})
 
 function App() {
   const [grid, setGrid] = useState<number[][]>([
@@ -34,6 +21,24 @@ function App() {
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [contactInfo, setContactInfo] = useState('')
   const [comment, setComment] = useState('')
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light')
+
+  // Create Material Design 3 theme based on mode
+  const theme = useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode: themeMode,
+          primary: {
+            main: '#6750A4',
+          },
+          secondary: {
+            main: '#625B71',
+          },
+        },
+      }),
+    [themeMode]
+  )
 
   // Track PWA installation events
   usePWAInstallTracking()
@@ -42,6 +47,10 @@ function App() {
   useEffect(() => {
     trackDeviceInfo()
   }, [])
+
+  const toggleTheme = () => {
+    setThemeMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'))
+  }
 
   const startGame = () => {
     setGameStarted(true)
@@ -152,6 +161,18 @@ function App() {
             ← Back
           </Button>
         )}
+
+        <IconButton
+          onClick={toggleTheme}
+          sx={{
+            position: 'absolute',
+            top: 20,
+            right: 20,
+          }}
+          aria-label="Toggle theme"
+        >
+          {themeMode === 'light' ? '🌙' : '☀️'}
+        </IconButton>
 
         <Typography variant="h3" component="h1" gutterBottom sx={{ mb: 4 }}>
           Cube Swipe 2048
