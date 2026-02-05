@@ -43,9 +43,13 @@ This project was built from scratch to production deployment using Claude Code A
 - ✅ Application Insights React plugin integration
 - ✅ Automatic page view and error tracking
 - ✅ Custom event tracking (trackEvent, trackMetric, trackException)
+- ✅ **PWA Installation Tracking** - Monitors app install events
+  - Tracks when install prompt is shown
+  - Tracks successful app installations
+  - Tracks standalone app launches
 - ✅ Development mode with console logging
 - ✅ Production mode with Azure telemetry
-- ✅ **Result:** Real-time user behavior insights
+- ✅ **Result:** Real-time user behavior insights and PWA adoption metrics
 
 ### 6. Security & Best Practices
 - ✅ Comprehensive `.gitignore` for secrets protection
@@ -225,6 +229,25 @@ try {
 // Track metrics
 trackMetric('GameDuration', 120, { level: 5 });
 ```
+
+### PWA Installation Tracking
+
+The app automatically tracks PWA installation events:
+
+**Tracked Events:**
+- `PWA_InstallPromptShown` - When browser shows install prompt
+- `PWA_AppInstalled` - When user completes installation
+- `PWA_LaunchedAsApp` - When app runs in standalone mode
+
+**View Install Metrics:**
+```kusto
+customEvents
+| where name startswith "PWA_"
+| summarize InstallCount = count() by name
+| render barchart
+```
+
+These metrics help measure PWA adoption and user engagement.
 
 See [analytics.usage.md](cube-swipe/src/analytics.usage.md) for detailed usage.
 
