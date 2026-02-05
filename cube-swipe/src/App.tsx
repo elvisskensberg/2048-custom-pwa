@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Button, Box, Typography, ThemeProvider, createTheme } from '@mui/material'
+import { useGesture } from '@use-gesture/react'
 import './App.css'
 import { usePWAInstallTracking } from './usePWAInstallTracking'
 import { InstallPrompt } from './InstallPrompt'
@@ -20,7 +21,7 @@ const theme = createTheme({
 
 function App() {
   const [grid, setGrid] = useState<number[][]>([
-    [0, 0, 0, 0],
+    [1, 1, 1, 1],
     [0, 0, 0, 0],
     [0, 0, 0, 0],
     [0, 0, 0, 0],
@@ -34,12 +35,33 @@ function App() {
     trackDeviceInfo()
   }, [])
 
-  const handleCellClick = (row: number, col: number) => {
-    const newGrid = grid.map((r, i) =>
-      r.map((cell, j) => (i === row && j === col ? cell + 1 : cell))
-    )
-    setGrid(newGrid)
+  const handleSwipe = (direction: 'left' | 'right' | 'up' | 'down') => {
+    console.log('Swipe detected:', direction)
+    // TODO: Implement 2048 game logic here
+    // Example: This is where we would update the grid based on swipe direction
+    setGrid((prevGrid) => {
+      // For now, just return the same grid (placeholder for future logic)
+      return prevGrid
+    })
   }
+
+  const bind = useGesture({
+    onDrag: ({ movement: [mx, my], last }) => {
+      if (!last) return
+
+      const threshold = 50
+      const absX = Math.abs(mx)
+      const absY = Math.abs(my)
+
+      if (absX > threshold || absY > threshold) {
+        if (absX > absY) {
+          handleSwipe(mx > 0 ? 'right' : 'left')
+        } else {
+          handleSwipe(my > 0 ? 'down' : 'up')
+        }
+      }
+    },
+  })
 
   return (
     <ThemeProvider theme={theme}>
@@ -59,12 +81,15 @@ function App() {
         </Typography>
 
         <Box
+          {...bind()}
           sx={{
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
             gap: 2,
             maxWidth: 500,
             width: '100%',
+            touchAction: 'none',
+            userSelect: 'none',
           }}
         >
           {grid.map((row, rowIndex) =>
@@ -72,15 +97,16 @@ function App() {
               <Button
                 key={`${rowIndex}-${colIndex}`}
                 variant="contained"
-                onClick={() => handleCellClick(rowIndex, colIndex)}
+                disableRipple
                 sx={{
                   aspectRatio: '1',
                   minHeight: 80,
                   fontSize: '1.5rem',
                   fontWeight: 'bold',
                   bgcolor: cell > 0 ? `hsl(${cell * 30}, 70%, 60%)` : 'grey.300',
+                  pointerEvents: 'none',
                   '&:hover': {
-                    bgcolor: cell > 0 ? `hsl(${cell * 30}, 70%, 50%)` : 'grey.400',
+                    bgcolor: cell > 0 ? `hsl(${cell * 30}, 70%, 60%)` : 'grey.300',
                   },
                 }}
               >
@@ -91,7 +117,7 @@ function App() {
         </Box>
 
         <Typography variant="body2" sx={{ mt: 4, color: 'text.secondary' }}>
-          Click tiles to increment values
+          Swipe left, right, up, or down to play
         </Typography>
 
         <InstallPrompt />
