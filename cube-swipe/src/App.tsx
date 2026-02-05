@@ -168,6 +168,7 @@ function App() {
             position: 'absolute',
             top: 20,
             right: 20,
+            border: themeMode === 'light' ? '1px solid #6750A4' : 'none',
           }}
           aria-label="Toggle theme"
         >
