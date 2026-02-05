@@ -2,6 +2,10 @@
 
 A 3D swipe-based 2048 game built with React, TypeScript, and Vite. This project demonstrates a complete production-ready setup using AI-assisted development with Claude Code.
 
+**🌐 Quick Access:**
+- **Production:** https://thankful-sky-020f0c103.4.azurestaticapps.net
+- **Local Dev:** http://localhost:5173 (run `npm run dev` in `cube-swipe/`)
+
 > **Note:** This entire project infrastructure—from Azure resources to CI/CD pipelines—was set up through AI assistance, showcasing modern development workflows with AI collaboration.
 
 ## 🤖 AI-Assisted Setup Journey
@@ -142,6 +146,7 @@ npm install
 
 # Start development server
 npm run dev
+# 🌐 Opens at http://localhost:5173
 
 # Run tests
 npm test
