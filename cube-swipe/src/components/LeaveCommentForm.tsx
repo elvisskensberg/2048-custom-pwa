@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Box, Typography, TextField, Stack, Button } from '@mui/material'
 import { FeedbackDialog } from './FeedbackDialog'
+import { AppVersion } from './AppVersion'
 
 interface LeaveCommentFormProps {
   onClose: () => void
@@ -50,55 +51,69 @@ export const LeaveCommentForm = ({ onClose }: LeaveCommentFormProps) => {
 
   return (
     <>
-      <Box sx={{ maxWidth: 500, width: '100%' }}>
-        <Typography variant="h5" gutterBottom sx={{ mb: 3, textAlign: 'center' }}>
-          Leave a Comment
-        </Typography>
-        <Stack spacing={3}>
-          <TextField
-            label="Contact Info (Email/Name)"
-            variant="outlined"
-            fullWidth
-            value={contactInfo}
-            onChange={(e) => setContactInfo(e.target.value)}
-            placeholder="Optional"
-          />
-          <TextField
-            label="Comments"
-            variant="outlined"
-            fullWidth
-            multiline
-            rows={6}
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Share your thoughts, suggestions, or feedback..."
-          />
-          <Stack direction="row" spacing={2} justifyContent="center">
-            <Button
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          width: '100%',
+          maxWidth: 600,
+          px: 2,
+          pb: 8,
+        }}
+      >
+        <Box sx={{ maxWidth: 500, width: '100%' }}>
+          <Typography variant="h5" gutterBottom sx={{ mb: 3, textAlign: 'center' }}>
+            Leave a Comment
+          </Typography>
+          <Stack spacing={3}>
+            <TextField
+              label="Contact Info (Email/Name)"
               variant="outlined"
-              onClick={onClose}
-              sx={{
-                px: 4,
-                py: 1.5,
-                textTransform: 'none',
-              }}
-            >
-              Back
-            </Button>
-            <Button
-              variant="contained"
-              onClick={handleSubmit}
-              disabled={!comment.trim()}
-              sx={{
-                px: 4,
-                py: 1.5,
-                textTransform: 'none',
-              }}
-            >
-              Submit
-            </Button>
+              fullWidth
+              value={contactInfo}
+              onChange={(e) => setContactInfo(e.target.value)}
+              placeholder="Optional"
+            />
+            <TextField
+              label="Comments"
+              variant="outlined"
+              fullWidth
+              multiline
+              rows={6}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Share your thoughts, suggestions, or feedback..."
+            />
+            <Stack direction="row" spacing={2} justifyContent="center">
+              <Button
+                variant="outlined"
+                onClick={onClose}
+                sx={{
+                  px: 4,
+                  py: 1.5,
+                  textTransform: 'none',
+                }}
+              >
+                Back
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handleSubmit}
+                disabled={!comment.trim()}
+                sx={{
+                  px: 4,
+                  py: 1.5,
+                  textTransform: 'none',
+                }}
+              >
+                Submit
+              </Button>
+            </Stack>
           </Stack>
-        </Stack>
+        </Box>
+
+        <AppVersion />
       </Box>
 
       <FeedbackDialog

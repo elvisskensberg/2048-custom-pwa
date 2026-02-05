@@ -1,5 +1,6 @@
 import { Box, Button, Typography } from '@mui/material'
 import { useGesture } from '@use-gesture/react'
+import { AppVersion } from './AppVersion'
 
 interface GameBoardProps {
   grid: number[][]
@@ -26,7 +27,18 @@ export const GameBoard = ({ grid, onSwipe }: GameBoardProps) => {
   })
 
   return (
-    <>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        maxWidth: 600,
+        px: 2,
+        pb: 8,
+      }}
+    >
       <Box
         {...bind()}
         sx={{
@@ -64,6 +76,8 @@ export const GameBoard = ({ grid, onSwipe }: GameBoardProps) => {
       <Typography variant="body2" sx={{ mt: 4, color: 'text.secondary' }}>
         Swipe left, right, up, or down to play
       </Typography>
-    </>
+
+      <AppVersion />
+    </Box>
   )
 }

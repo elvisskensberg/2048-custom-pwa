@@ -8,6 +8,7 @@ import { ThemeToggle } from './components/ThemeToggle'
 import { GameBoard } from './components/GameBoard'
 import { LeaveCommentForm } from './components/LeaveCommentForm'
 import { AboutSection } from './components/AboutSection'
+import { AppVersion } from './components/AppVersion'
 import { testGoogleScriptAPI } from './utils/testGoogleScript'
 
 function App() {
@@ -174,7 +175,7 @@ function App() {
         </Typography>
 
         {!gameStarted && !aboutOpen && !commentsOpen ? (
-          <Stack spacing={1.2} alignItems="center" sx={{ width: '100%', maxWidth: 400, px: 2 }}>
+          <Stack spacing={1.2} alignItems="center" sx={{ width: '100%', maxWidth: 400, px: 2, pb: 8 }}>
             <Button
               variant="contained"
               fullWidth
@@ -251,6 +252,8 @@ function App() {
                 Install The App
               </Button>
             )}
+
+            <AppVersion />
           </Stack>
         ) : aboutOpen ? (
           <AboutSection onClose={closeAbout} />
@@ -259,18 +262,6 @@ function App() {
         ) : (
           <GameBoard grid={grid} onSwipe={handleSwipe} />
         )}
-
-        <Typography
-          variant="caption"
-          sx={{
-            position: 'absolute',
-            bottom: 16,
-            color: 'text.disabled',
-            fontSize: '0.75rem'
-          }}
-        >
-          v0.03
-        </Typography>
       </Box>
     </ThemeProvider>
   )
