@@ -7,9 +7,10 @@ import { trackDeviceInfo } from './analytics'
 import { BackButton } from './components/BackButton'
 import { ThemeToggle } from './components/ThemeToggle'
 import { GameBoard } from './components/GameBoard'
+import { FeedbackDialog } from './components/FeedbackDialog'
 
 // Google Apps Script endpoint for form submissions
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwSIH1RDulC7fm0TU6EtMO8i4jzPNzKOFbp2SGRI6R0aZ1sBOIfsTp6yLpOOYh3gQe3/exec"
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx5cPbNkM1kKZ7DANj7Ql4OWguS7shXwCabdpXWmNtBbr1YaOsp1r6lukCfHgoGRLfLXw/exec"
 
 function App() {
   const [grid, setGrid] = useState<number[][]>([
@@ -24,6 +25,10 @@ function App() {
   const [contactInfo, setContactInfo] = useState('')
   const [comment, setComment] = useState('')
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light')
+  const [feedbackDialog, setFeedbackDialog] = useState<{ open: boolean; type: 'success' | 'error' }>({
+    open: false,
+    type: 'success',
+  })
 
   // Create Material Design 3 theme based on mode
   const theme = useMemo(
@@ -95,7 +100,7 @@ function App() {
 
       // Note: With 'no-cors', we can't read the response body,
       // but we can assume success if no error is thrown.
-      alert('Thank you for your feedback! Your comment has been submitted.')
+      setFeedbackDialog({ open: true, type: 'success' })
 
       // Clear form and close
       setContactInfo('')
@@ -103,8 +108,12 @@ function App() {
       closeComments()
     } catch (error) {
       console.error('Submission failed:', error)
-      alert('Sorry, there was an error submitting your comment. Please try again.')
+      setFeedbackDialog({ open: true, type: 'error' })
     }
+  }
+
+  const closeFeedbackDialog = () => {
+    setFeedbackDialog({ ...feedbackDialog, open: false })
   }
 
   const handleSwipe = (direction: 'left' | 'right' | 'up' | 'down') => {
@@ -264,6 +273,12 @@ function App() {
         )}
 
         <InstallPrompt />
+
+        <FeedbackDialog
+          open={feedbackDialog.open}
+          type={feedbackDialog.type}
+          onClose={closeFeedbackDialog}
+        />
       </Box>
     </ThemeProvider>
   )
