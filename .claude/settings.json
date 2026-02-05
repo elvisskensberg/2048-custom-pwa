@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cmd.exe /c \"\"\"C:\\\\Program Files\\\\Microsoft SDKs\\\\Azure\\\\CLI2\\\\wbin\\\\az.cmd\"\" monitor app-insights component list --resource-group rg-2048-custom-pwa -o table\")"
+      "Bash(cmd.exe /c \"\"\"C:\\\\Program Files\\\\Microsoft SDKs\\\\Azure\\\\CLI2\\\\wbin\\\\az.cmd\"\" monitor app-insights component list --resource-group rg-2048-custom-pwa -o table\")",
+      "Bash(npm run lint:*)"
     ]
   }
 }

@@ -25,7 +25,7 @@ if (import.meta.env.PROD) {
 }
 
 // Export tracking functions
-export const trackEvent = (name: string, properties?: Record<string, any>) => {
+export const trackEvent = (name: string, properties?: Record<string, unknown>) => {
   if (import.meta.env.PROD) {
     appInsights.trackEvent({ name }, properties);
   } else {
@@ -33,7 +33,7 @@ export const trackEvent = (name: string, properties?: Record<string, any>) => {
   }
 };
 
-export const trackException = (error: Error, properties?: Record<string, any>) => {
+export const trackException = (error: Error, properties?: Record<string, unknown>) => {
   if (import.meta.env.PROD) {
     appInsights.trackException({ exception: error }, properties);
   } else {
@@ -41,7 +41,7 @@ export const trackException = (error: Error, properties?: Record<string, any>) =
   }
 };
 
-export const trackMetric = (name: string, value: number, properties?: Record<string, any>) => {
+export const trackMetric = (name: string, value: number, properties?: Record<string, unknown>) => {
   if (import.meta.env.PROD) {
     appInsights.trackMetric({ name, average: value }, properties);
   } else {
@@ -49,7 +49,7 @@ export const trackMetric = (name: string, value: number, properties?: Record<str
   }
 };
 
-export const trackPageView = (name?: string, properties?: Record<string, any>) => {
+export const trackPageView = (name?: string, properties?: Record<string, unknown>) => {
   if (import.meta.env.PROD) {
     appInsights.trackPageView({ name }, properties);
   } else {

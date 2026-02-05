@@ -25,7 +25,12 @@
       "Bash(\"C:\\\\Program Files\\\\Microsoft SDKs\\\\Azure\\\\CLI2\\\\wbin\\\\az.cmd\" staticwebapp create --name 2048-custom-pwa --resource-group rg-2048-custom-pwa --location westeurope --sku Free)",
       "Bash(\"C:\\\\Program Files\\\\Microsoft SDKs\\\\Azure\\\\CLI2\\\\wbin\\\\az.cmd\" monitor app-insights component list --resource-group rg-2048-custom-pwa --query \"[].{Name:name, InstrumentationKey:instrumentationKey, ConnectionString:connectionString}\" -o table)",
       "Bash(powershell -Command:*)",
-      "Bash(gh:*)"
+      "Bash(gh:*)",
+      "Bash(curl:*)",
+      "Bash(npm run lint:fix:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
