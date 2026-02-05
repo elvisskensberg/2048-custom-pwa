@@ -51,7 +51,7 @@ export const trackMetric = (name: string, value: number, properties?: Record<str
 
 export const trackPageView = (name?: string, properties?: Record<string, unknown>) => {
   if (import.meta.env.PROD) {
-    appInsights.trackPageView({ name }, properties);
+    appInsights.trackPageView({ name, properties });
   } else {
     console.log('[Analytics - Dev Mode] Page View:', name, properties);
   }
