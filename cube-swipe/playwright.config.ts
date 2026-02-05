@@ -27,6 +27,26 @@ export default defineConfig({
         hasTouch: true,
       },
     },
+    {
+      name: 'iPad 11th Gen',
+      use: {
+        ...devices['iPad Pro 11'],
+        viewport: { width: 834, height: 1194 },
+        deviceScaleFactor: 2,
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
+    {
+      name: 'Samsung Galaxy Tab S10',
+      use: {
+        ...devices['Galaxy Tab S4'], // Base Android tablet
+        viewport: { width: 800, height: 1280 },
+        deviceScaleFactor: 2.5,
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
   ],
   webServer: {
     command: 'npm run dev',
