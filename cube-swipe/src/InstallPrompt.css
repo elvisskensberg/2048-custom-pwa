@@ -1,0 +1,238 @@
+.install-prompt {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.install-buttons {
+  display: flex;
+  gap: 10px;
+  flex-direction: column;
+}
+
+.install-button,
+.share-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.install-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.install-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.share-button {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+}
+
+.share-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+}
+
+.button-icon {
+  font-size: 18px;
+}
+
+/* iOS Instructions Overlay */
+.ios-instructions-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.ios-instructions {
+  background: white;
+  border-radius: 16px;
+  padding: 30px;
+  max-width: 400px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.ios-instructions h3 {
+  margin: 0 0 20px 0;
+  color: #333;
+  font-size: 24px;
+}
+
+.close-button {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  font-size: 32px;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.close-button:hover {
+  color: #333;
+}
+
+.instruction-steps {
+  margin: 20px 0;
+}
+
+.step {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  align-items: flex-start;
+}
+
+.step-number {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.step p {
+  margin: 0;
+  color: #555;
+  line-height: 1.6;
+}
+
+.step strong {
+  color: #333;
+}
+
+.ios-icon {
+  font-size: 20px;
+  font-weight: bold;
+  color: #007AFF;
+}
+
+.instruction-note {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f0f4ff;
+  border-radius: 8px;
+  color: #555;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .install-prompt {
+    bottom: 10px;
+    right: 10px;
+  }
+
+  .install-buttons {
+    flex-direction: row;
+  }
+
+  .install-button,
+  .share-button {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  .button-icon {
+    font-size: 16px;
+  }
+
+  .ios-instructions {
+    padding: 25px;
+  }
+
+  .ios-instructions h3 {
+    font-size: 20px;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .ios-instructions {
+    background: #1e1e1e;
+    color: #e0e0e0;
+  }
+
+  .ios-instructions h3 {
+    color: #fff;
+  }
+
+  .step p {
+    color: #ccc;
+  }
+
+  .step strong {
+    color: #fff;
+  }
+
+  .instruction-note {
+    background: #2a2a2a;
+    color: #ccc;
+  }
+
+  .close-button {
+    color: #666;
+  }
+
+  .close-button:hover {
+    color: #fff;
+  }
+}

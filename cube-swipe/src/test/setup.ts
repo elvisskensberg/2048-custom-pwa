@@ -7,6 +7,11 @@ vi.mock('../usePWAInstallTracking', () => ({
   usePWAInstallTracking: () => {},
 }))
 
+// Mock InstallPrompt component
+vi.mock('../InstallPrompt', () => ({
+  InstallPrompt: () => null,
+}))
+
 // Mock static assets
 vi.mock('/vite.svg', () => ({ default: 'mocked-vite-logo.svg' }))
 vi.mock('*.svg', () => ({ default: 'mocked-logo.svg' }))
