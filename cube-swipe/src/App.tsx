@@ -130,15 +130,17 @@ function App() {
     <ThemeProvider theme={theme}>
       <Box
         sx={{
-          minHeight: '100vh',
-          maxHeight: '100vh',
+          height: '100vh',
+          width: '100vw',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           bgcolor: 'background.default',
-          padding: { xs: 2, sm: 3 },
-          position: 'relative',
+          padding: { xs: 1.5, sm: 2 },
+          position: 'fixed',
+          top: 0,
+          left: 0,
           overflow: 'hidden',
         }}
       >
@@ -146,12 +148,12 @@ function App() {
 
         <ThemeToggle themeMode={themeMode} onToggle={toggleTheme} />
 
-        <Typography variant="h3" component="h1" gutterBottom sx={{ mb: 4, color: 'text.primary' }}>
+        <Typography variant="h3" component="h1" gutterBottom sx={{ mb: 2, color: 'text.primary' }}>
           Cube Swipe 2048
         </Typography>
 
         {!gameStarted && !aboutOpen && !commentsOpen ? (
-          <Stack spacing={2} alignItems="center">
+          <Stack spacing={1.5} alignItems="center">
             <Button
               variant="contained"
               size="large"
