@@ -135,33 +135,33 @@ function App() {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent: 'flex-start',
           bgcolor: 'background.default',
-          padding: { xs: 1.5, sm: 2 },
+          padding: { xs: 1, sm: 1.5 },
+          paddingTop: { xs: 8, sm: 10 },
           position: 'fixed',
           top: 0,
           left: 0,
-          overflow: 'hidden',
+          overflow: 'auto',
         }}
       >
         {gameStarted && <BackButton onClick={goBack} />}
 
         <ThemeToggle themeMode={themeMode} onToggle={toggleTheme} />
 
-        <Typography variant="h3" component="h1" gutterBottom sx={{ mb: 2, color: 'text.primary' }}>
+        <Typography variant="h3" component="h1" gutterBottom sx={{ mb: 1.5, mt: 0, color: 'text.primary' }}>
           Cube Swipe 2048
         </Typography>
 
         {!gameStarted && !aboutOpen && !commentsOpen ? (
-          <Stack spacing={1.5} alignItems="center">
+          <Stack spacing={1.2} alignItems="center" sx={{ width: '100%', maxWidth: 400, px: 2 }}>
             <Button
               variant="contained"
-              size="large"
+              fullWidth
               onClick={startGame}
               sx={{
-                px: 6,
-                py: 2,
-                fontSize: '1.2rem',
+                py: 1.5,
+                fontSize: '1.1rem',
                 textTransform: 'none',
               }}
             >
@@ -169,12 +169,11 @@ function App() {
             </Button>
             <Button
               variant="outlined"
-              size="medium"
+              fullWidth
               onClick={openAbout}
               sx={{
-                px: 4,
-                py: 1.5,
-                fontSize: '1rem',
+                py: 1.2,
+                fontSize: '0.95rem',
                 textTransform: 'none',
               }}
             >
@@ -182,12 +181,11 @@ function App() {
             </Button>
             <Button
               variant="outlined"
-              size="medium"
+              fullWidth
               onClick={openComments}
               sx={{
-                px: 4,
-                py: 1.5,
-                fontSize: '1rem',
+                py: 1.2,
+                fontSize: '0.95rem',
                 textTransform: 'none',
               }}
             >
@@ -195,12 +193,11 @@ function App() {
             </Button>
             <Button
               variant="outlined"
-              size="medium"
+              fullWidth
               onClick={handleShare}
               sx={{
-                px: 4,
-                py: 1.5,
-                fontSize: '1rem',
+                py: 1.2,
+                fontSize: '0.95rem',
                 textTransform: 'none',
               }}
             >
@@ -208,12 +205,11 @@ function App() {
             </Button>
             <Button
               variant="outlined"
-              size="medium"
+              fullWidth
               onClick={handleInstall}
               sx={{
-                px: 4,
-                py: 1.5,
-                fontSize: '1rem',
+                py: 1.2,
+                fontSize: '0.95rem',
                 textTransform: 'none',
               }}
             >
@@ -264,7 +260,7 @@ function App() {
             fontSize: '0.75rem'
           }}
         >
-          v0.01
+          v0.02
         </Typography>
       </Box>
     </ThemeProvider>
