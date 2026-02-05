@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Button, Box, Typography, ThemeProvider, createTheme, TextField, Stack, IconButton } from '@mui/material'
-import { useGesture } from '@use-gesture/react'
+import { Button, Box, Typography, ThemeProvider, createTheme, TextField, Stack } from '@mui/material'
 import './App.css'
 import { usePWAInstallTracking } from './usePWAInstallTracking'
 import { InstallPrompt } from './InstallPrompt'
 import { trackDeviceInfo } from './analytics'
+import { BackButton } from './components/BackButton'
+import { ThemeToggle } from './components/ThemeToggle'
+import { GameBoard } from './components/GameBoard'
 
 // Google Apps Script endpoint for form submissions
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwSIH1RDulC7fm0TU6EtMO8i4jzPNzKOFbp2SGRI6R0aZ1sBOIfsTp6yLpOOYh3gQe3/exec"
@@ -115,24 +117,6 @@ function App() {
     })
   }
 
-  const bind = useGesture({
-    onDrag: ({ movement: [mx, my], last }) => {
-      if (!last) return
-
-      const threshold = 50
-      const absX = Math.abs(mx)
-      const absY = Math.abs(my)
-
-      if (absX > threshold || absY > threshold) {
-        if (absX > absY) {
-          handleSwipe(mx > 0 ? 'right' : 'left')
-        } else {
-          handleSwipe(my > 0 ? 'down' : 'up')
-        }
-      }
-    },
-  })
-
   return (
     <ThemeProvider theme={theme}>
       <Box
@@ -147,33 +131,9 @@ function App() {
           position: 'relative',
         }}
       >
-        {gameStarted && (
-          <Button
-            variant="outlined"
-            onClick={goBack}
-            sx={{
-              position: 'absolute',
-              top: 20,
-              left: 20,
-              textTransform: 'none',
-            }}
-          >
-            ← Back
-          </Button>
-        )}
+        {gameStarted && <BackButton onClick={goBack} />}
 
-        <IconButton
-          onClick={toggleTheme}
-          sx={{
-            position: 'absolute',
-            top: 20,
-            right: 20,
-            border: themeMode === 'light' ? '1px solid #6750A4' : 'none',
-          }}
-          aria-label="Toggle theme"
-        >
-          {themeMode === 'light' ? '🌙' : '☀️'}
-        </IconButton>
+        <ThemeToggle themeMode={themeMode} onToggle={toggleTheme} />
 
         <Typography variant="h3" component="h1" gutterBottom sx={{ mb: 4 }}>
           Cube Swipe 2048
@@ -300,45 +260,7 @@ function App() {
             </Stack>
           </Box>
         ) : (
-          <>
-            <Box
-              {...bind()}
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: 2,
-                maxWidth: 500,
-                width: '100%',
-                touchAction: 'none',
-                userSelect: 'none',
-              }}
-            >
-              {grid.map((row, rowIndex) =>
-                row.map((cell, colIndex) => (
-                  <Button
-                    key={`${rowIndex}-${colIndex}`}
-                    variant="contained"
-                    disableRipple
-                    sx={{
-                      aspectRatio: '1',
-                      minHeight: 80,
-                      fontSize: '1.5rem',
-                      fontWeight: 'bold',
-                      bgcolor: cell > 0 ? `hsl(${cell * 30}, 70%, 60%)` : 'grey.300',
-                      pointerEvents: 'none',
-                      cursor: 'default',
-                    }}
-                  >
-                    {cell > 0 ? cell : ''}
-                  </Button>
-                ))
-              )}
-            </Box>
-
-            <Typography variant="body2" sx={{ mt: 4, color: 'text.secondary' }}>
-              Swipe left, right, up, or down to play
-            </Typography>
-          </>
+          <GameBoard grid={grid} onSwipe={handleSwipe} />
         )}
 
         <InstallPrompt />
