@@ -94,6 +94,38 @@ function App() {
     })
   }
 
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Cube Swipe 2048',
+          text: 'Check out this awesome 2048 game!',
+          url: window.location.href,
+        })
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+          console.error('Share failed:', error)
+        }
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(window.location.href)
+        alert('Link copied to clipboard!')
+      } catch {
+        console.error('Clipboard failed')
+      }
+    }
+  }
+
+  const handleInstall = () => {
+    const installButton = document.querySelector('.install-button') as HTMLButtonElement
+    if (installButton) {
+      installButton.click()
+    } else {
+      alert('Please use your browser\'s install option to add this app to your home screen.')
+    }
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <Box
@@ -159,6 +191,32 @@ function App() {
             >
               Leave Comment
             </Button>
+            <Button
+              variant="outlined"
+              size="medium"
+              onClick={handleShare}
+              sx={{
+                px: 4,
+                py: 1.5,
+                fontSize: '1rem',
+                textTransform: 'none',
+              }}
+            >
+              Share
+            </Button>
+            <Button
+              variant="outlined"
+              size="medium"
+              onClick={handleInstall}
+              sx={{
+                px: 4,
+                py: 1.5,
+                fontSize: '1rem',
+                textTransform: 'none',
+              }}
+            >
+              Install The App
+            </Button>
           </Stack>
         ) : aboutOpen ? (
           <Box sx={{ maxWidth: 600, textAlign: 'center', px: 2 }}>
@@ -194,6 +252,18 @@ function App() {
         )}
 
         <InstallPrompt />
+
+        <Typography
+          variant="caption"
+          sx={{
+            position: 'absolute',
+            bottom: 16,
+            color: 'text.disabled',
+            fontSize: '0.75rem'
+          }}
+        >
+          v0.01
+        </Typography>
       </Box>
     </ThemeProvider>
   )
