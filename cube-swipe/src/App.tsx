@@ -40,6 +40,10 @@ function App() {
     setGameStarted(true)
   }
 
+  const goBack = () => {
+    setGameStarted(false)
+  }
+
   const handleSwipe = (direction: 'left' | 'right' | 'up' | 'down') => {
     console.log('Swipe detected:', direction)
     // TODO: Implement 2048 game logic here
@@ -79,8 +83,24 @@ function App() {
           justifyContent: 'center',
           bgcolor: 'background.default',
           padding: 3,
+          position: 'relative',
         }}
       >
+        {gameStarted && (
+          <Button
+            variant="outlined"
+            onClick={goBack}
+            sx={{
+              position: 'absolute',
+              top: 20,
+              left: 20,
+              textTransform: 'none',
+            }}
+          >
+            ← Back
+          </Button>
+        )}
+
         <Typography variant="h3" component="h1" gutterBottom sx={{ mb: 4 }}>
           Cube Swipe 2048
         </Typography>
