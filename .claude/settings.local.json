@@ -28,9 +28,7 @@
       "Bash(gh:*)",
       "Bash(curl:*)",
       "Bash(npm run lint:fix:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git add:*)"
     ]
   }
 }
