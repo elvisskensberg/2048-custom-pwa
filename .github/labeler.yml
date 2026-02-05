@@ -1,0 +1,30 @@
+# Auto-label PRs based on changed files
+
+'dependencies':
+  - 'cube-swipe/package.json'
+  - 'cube-swipe/package-lock.json'
+
+'documentation':
+  - '**/*.md'
+  - 'docs/**/*'
+
+'ci/cd':
+  - '.github/**/*'
+
+'tests':
+  - 'cube-swipe/**/*.test.*'
+  - 'cube-swipe/**/*.spec.*'
+  - 'cube-swipe/src/test/**/*'
+
+'configuration':
+  - '**/*.config.*'
+  - '**/.*rc'
+  - '**/.*rc.json'
+
+'styles':
+  - 'cube-swipe/**/*.css'
+  - 'cube-swipe/**/*.scss'
+
+'typescript':
+  - 'cube-swipe/**/*.ts'
+  - 'cube-swipe/**/*.tsx'

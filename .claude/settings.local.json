@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev:*)",
+      "Bash(npm install:*)",
+      "Bash(az account:*)",
+      "Bash(cmd.exe /c \"az account show\")",
+      "Bash(powershell.exe -Command \"az account show\")",
+      "Bash(where:*)",
+      "Bash(az:*)",
+      "Bash(echo:*)",
+      "Bash(powershell.exe -Command:*)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\esken\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Code-2048-custom-pwa\\\\92a2299a-44b4-43d2-a4be-d75441080da5\\\\scratchpad\\\\add-azure-path.ps1\")",
+      "Bash(\"C:\\\\Program Files \\(x86\\)\\\\Microsoft SDKs\\\\Azure\\\\CLI2\\\\wbin\\\\az.cmd\" --version)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\esken\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Code-2048-custom-pwa\\\\92a2299a-44b4-43d2-a4be-d75441080da5\\\\scratchpad\\\\fix-azure-path.ps1\")",
+      "Bash(npx:*)",
+      "Bash(winget --version:*)",
+      "Bash(winget install:*)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft SDKs\\\\Azure\\\\CLI2\\\\wbin\\\\az.cmd\" --version)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft SDKs\\\\Azure\\\\CLI2\\\\wbin\\\\az.cmd\" account show)",
+      "Bash(npm run build:*)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft SDKs\\\\Azure\\\\CLI2\\\\wbin\\\\az.cmd\" staticwebapp secrets list --name 2048-custom-pwa --resource-group rg-2048-custom-pwa --query \"properties.apiKey\" -o tsv)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft SDKs\\\\Azure\\\\CLI2\\\\wbin\\\\az.cmd\" group show --name rg-2048-custom-pwa)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft SDKs\\\\Azure\\\\CLI2\\\\wbin\\\\az.cmd\" staticwebapp create --name 2048-custom-pwa --resource-group rg-2048-custom-pwa --location westeurope --sku Free --source .)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft SDKs\\\\Azure\\\\CLI2\\\\wbin\\\\az.cmd\" staticwebapp create --name 2048-custom-pwa --resource-group rg-2048-custom-pwa --location westeurope --sku Free)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft SDKs\\\\Azure\\\\CLI2\\\\wbin\\\\az.cmd\" monitor app-insights component list --resource-group rg-2048-custom-pwa --query \"[].{Name:name, InstrumentationKey:instrumentationKey, ConnectionString:connectionString}\" -o table)",
+      "Bash(powershell -Command:*)"
+    ]
+  }
+}

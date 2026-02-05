@@ -12,6 +12,22 @@ dist
 dist-ssr
 *.local
 
+# Environment files (*.local is already covered above)
+.env.local
+.env.*.local
+
+# Secrets and sensitive files
+*.key
+*.pem
+*.pfx
+*.p12
+secrets/
+credentials/
+
+# Azure deployment tokens (if accidentally saved)
+deployment-token.txt
+azure-token.txt
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -22,3 +38,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# OS files
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Test coverage
+coverage/
+*.lcov
+.nyc_output
