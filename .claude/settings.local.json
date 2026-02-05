@@ -28,7 +28,8 @@
       "Bash(gh:*)",
       "Bash(curl:*)",
       "Bash(npm run lint:fix:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(npm test:*)"
     ]
   }
 }
