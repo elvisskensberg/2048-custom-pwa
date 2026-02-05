@@ -34,3 +34,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Accidentally created in root (should only be in subdirectories)
+/package.json
+/package-lock.json
