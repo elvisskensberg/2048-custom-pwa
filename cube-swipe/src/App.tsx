@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Button, Box, Typography, ThemeProvider, createTheme } from '@mui/material'
+import { Button, Box, Typography, ThemeProvider, createTheme, TextField, Stack } from '@mui/material'
 import { useGesture } from '@use-gesture/react'
 import './App.css'
 import { usePWAInstallTracking } from './usePWAInstallTracking'
@@ -27,6 +27,10 @@ function App() {
     [0, 0, 0, 0],
   ])
   const [gameStarted, setGameStarted] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [contactInfo, setContactInfo] = useState('')
+  const [comment, setComment] = useState('')
 
   // Track PWA installation events
   usePWAInstallTracking()
@@ -42,6 +46,30 @@ function App() {
 
   const goBack = () => {
     setGameStarted(false)
+  }
+
+  const openAbout = () => {
+    setAboutOpen(true)
+  }
+
+  const closeAbout = () => {
+    setAboutOpen(false)
+  }
+
+  const openComments = () => {
+    setCommentsOpen(true)
+  }
+
+  const closeComments = () => {
+    setCommentsOpen(false)
+  }
+
+  const handleSubmitComment = () => {
+    // TODO: Implement comment submission logic
+    console.log('Comment submitted:', { contactInfo, comment })
+    setContactInfo('')
+    setComment('')
+    closeComments()
   }
 
   const handleSwipe = (direction: 'left' | 'right' | 'up' | 'down') => {
@@ -105,20 +133,126 @@ function App() {
           Cube Swipe 2048
         </Typography>
 
-        {!gameStarted ? (
-          <Button
-            variant="contained"
-            size="large"
-            onClick={startGame}
-            sx={{
-              px: 6,
-              py: 2,
-              fontSize: '1.2rem',
-              textTransform: 'none',
-            }}
-          >
-            Start Game
-          </Button>
+        {!gameStarted && !aboutOpen && !commentsOpen ? (
+          <Stack spacing={2} alignItems="center">
+            <Button
+              variant="contained"
+              size="large"
+              onClick={startGame}
+              sx={{
+                px: 6,
+                py: 2,
+                fontSize: '1.2rem',
+                textTransform: 'none',
+              }}
+            >
+              Start Game
+            </Button>
+            <Button
+              variant="outlined"
+              size="medium"
+              onClick={openAbout}
+              sx={{
+                px: 4,
+                py: 1.5,
+                fontSize: '1rem',
+                textTransform: 'none',
+              }}
+            >
+              About
+            </Button>
+            <Button
+              variant="outlined"
+              size="medium"
+              onClick={openComments}
+              sx={{
+                px: 4,
+                py: 1.5,
+                fontSize: '1rem',
+                textTransform: 'none',
+              }}
+            >
+              Leave Comment
+            </Button>
+          </Stack>
+        ) : aboutOpen ? (
+          <Box sx={{ maxWidth: 600, textAlign: 'center' }}>
+            <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
+              About Cube Swipe 2048
+            </Typography>
+            <Typography variant="body1" paragraph sx={{ mb: 2 }}>
+              Cube Swipe 2048 is a modern take on the classic 2048 puzzle game.
+              Swipe in any direction to move the tiles and combine matching numbers.
+              The goal is to reach the 2048 tile!
+            </Typography>
+            <Typography variant="body1" paragraph sx={{ mb: 3 }}>
+              Built with React, Material Design 3, and PWA technology for a seamless
+              experience across all devices. Install it on your device for offline play!
+            </Typography>
+            <Button
+              variant="contained"
+              onClick={closeAbout}
+              sx={{
+                px: 4,
+                py: 1.5,
+                fontSize: '1rem',
+                textTransform: 'none',
+              }}
+            >
+              Back
+            </Button>
+          </Box>
+        ) : commentsOpen ? (
+          <Box sx={{ maxWidth: 500, width: '100%' }}>
+            <Typography variant="h5" gutterBottom sx={{ mb: 3, textAlign: 'center' }}>
+              Leave a Comment
+            </Typography>
+            <Stack spacing={3}>
+              <TextField
+                label="Contact Info (Email/Name)"
+                variant="outlined"
+                fullWidth
+                value={contactInfo}
+                onChange={(e) => setContactInfo(e.target.value)}
+                placeholder="Optional"
+              />
+              <TextField
+                label="Comments"
+                variant="outlined"
+                fullWidth
+                multiline
+                rows={6}
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Share your thoughts, suggestions, or feedback..."
+              />
+              <Stack direction="row" spacing={2} justifyContent="center">
+                <Button
+                  variant="outlined"
+                  onClick={closeComments}
+                  sx={{
+                    px: 4,
+                    py: 1.5,
+                    textTransform: 'none',
+                  }}
+                >
+                  Back
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={handleSubmitComment}
+                  disabled={!comment.trim()}
+                  sx={{
+                    px: 4,
+                    py: 1.5,
+                    textTransform: 'none',
+                  }}
+                >
+                  Submit
+                </Button>
+              </Stack>
+            </Stack>
+          </Box>
         ) : (
           <>
             <Box
