@@ -11,7 +11,7 @@ import { FeedbackDialog } from './components/FeedbackDialog'
 import { testGoogleScriptAPI } from './utils/testGoogleScript'
 
 // Google Apps Script endpoint for form submissions
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx5cPbNkM1kKZ7DANj7Ql4OWguS7shXwCabdpXWmNtBbr1YaOsp1r6lukCfHgoGRLfLXw/exec"
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwxSWgM5vM7UkTGshbZzBHMrC_MXQoApLBsvT-1Gu7S168EHkrno8CErULU7HiuSAQ17g/exec";
 
 function App() {
   const [grid, setGrid] = useState<number[][]>([
