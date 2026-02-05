@@ -17,6 +17,16 @@ export default defineConfig({
       name: 'iPhone 14',
       use: { ...devices['iPhone 14'] },
     },
+    {
+      name: 'Galaxy S24 Ultra',
+      use: {
+        ...devices['Galaxy S9+'], // Base Android device
+        viewport: { width: 412, height: 915 },
+        deviceScaleFactor: 3.5,
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
   ],
   webServer: {
     command: 'npm run dev',
