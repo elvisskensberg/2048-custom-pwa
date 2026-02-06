@@ -11,7 +11,7 @@ export const AppVersion = () => {
         fontSize: '0.75rem',
       }}
     >
-      v0.07
+      v0.08
     </Typography>
   )
 }

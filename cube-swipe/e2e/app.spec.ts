@@ -49,9 +49,47 @@ test.describe('Elvis Skensberg AI Showcase', () => {
   test('should navigate to About screen', async ({ page }, testInfo) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'About' }).click()
-    await expect(page.getByRole('heading', { name: 'About This Showcase' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Production Build (Making It Fast™)' })).toBeVisible()
 
-    await page.screenshot({ path: `e2e/screenshots/${testInfo.project.name}/app-about.png`, fullPage: true, scale: 'device' })
+    // Capture all 10 pages of the About section
+    const pages = [
+      'Production Build (Making It Fast™)',
+      'Azure Cloud (Microsoft Money Pit)',
+      'CI/CD Pipeline (Robots Deploying Robots)',
+      'Testing (Trust But Verify)',
+      'Analytics (Big Brother, But Helpful)',
+      'Security (Keeping Secrets Secret)',
+      'Developer Experience (Not Terrible)',
+      'E2E Testing (Testing Like Users Do)',
+      'UI/UX (Making It Pretty)',
+      'Layout & CSS (The 100vw Bug of 2025)',
+    ]
+
+    for (let i = 0; i < pages.length; i++) {
+      await expect(page.getByRole('heading', { name: pages[i] })).toBeVisible()
+
+      // Save to device folder (for comprehensive device testing)
+      await page.screenshot({
+        path: `e2e/screenshots/${testInfo.project.name}/app-about-page${i + 1}.png`,
+        fullPage: true,
+        scale: 'device',
+      })
+
+      // Also save to story-mode folder (1:1 ratio for PDF generation) - only for Square-1080p
+      if (testInfo.project.name === 'Square-1080p') {
+        await page.screenshot({
+          path: `e2e/screenshots/story-mode/page${i + 1}-${pages[i].toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`,
+          fullPage: true,
+          scale: 'device',
+        })
+      }
+
+      // Navigate to next page (skip on last page)
+      if (i < pages.length - 1) {
+        await page.getByLabel('Next page').click()
+        await page.waitForTimeout(300) // Wait for navigation animation
+      }
+    }
   })
 
   test('should navigate to Leave Comment screen', async ({ page }, testInfo) => {

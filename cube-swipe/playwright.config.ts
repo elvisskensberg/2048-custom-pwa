@@ -1,5 +1,9 @@
 import { defineConfig, devices } from '@playwright/test'
 
+// TODO: Convert generated 1:1 ratio screenshots to PDF format for documentation
+// Square viewport ensures consistent aspect ratio for PDF conversion
+// Recommended tools: ImageMagick, wkhtmltopdf, or Puppeteer PDF generation
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -19,6 +23,15 @@ export default defineConfig({
     },
   },
   projects: [
+    {
+      name: 'Square-1080p', // 1:1 ratio for PDF conversion
+      use: {
+        viewport: { width: 1080, height: 1080 },
+        deviceScaleFactor: 2,
+        isMobile: false,
+        hasTouch: false,
+      },
+    },
     {
       name: 'iPhone 14',
       use: { ...devices['iPhone 14'] },

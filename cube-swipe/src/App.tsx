@@ -58,8 +58,12 @@ function App() {
   const handleBack = () => {
     if (gameMode) {
       setGameMode(null)
-    } else {
+    } else if (gameStarted) {
       setGameStarted(false)
+    } else if (aboutOpen) {
+      setAboutOpen(false)
+    } else if (commentsOpen) {
+      setCommentsOpen(false)
     }
   }
 
@@ -78,7 +82,7 @@ function App() {
           overflow: 'hidden',
         }}
       >
-        {gameStarted && <BackButton onClick={handleBack} />}
+        {(gameStarted || aboutOpen || commentsOpen) && <BackButton onClick={handleBack} />}
 
         <ThemeToggle
           themeMode={themeMode}
@@ -108,7 +112,7 @@ function App() {
           />
         )}
         {currentView === 'modeSelect' && <GameModeSelect onSelectMode={setGameMode} />}
-        {currentView === 'about' && <AboutSection onClose={() => setAboutOpen(false)} />}
+        {currentView === 'about' && <AboutSection />}
         {currentView === 'comments' && <LeaveCommentForm onClose={() => setCommentsOpen(false)} />}
         {currentView === 'game' && gameMode && <GameBoard gameMode={gameMode} />}
       </Box>
