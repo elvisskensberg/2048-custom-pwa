@@ -80,7 +80,78 @@ npm run build
 3. Check that environment variables are correctly referenced
 4. Re-run build until successful
 
-### 5. Pre-Commit Summary
+### 5. Code Review & Architecture ✅
+
+Before running E2E tests or committing, review the code for clean architecture:
+
+**React Component Patterns:**
+- Components should have a single responsibility (App.tsx = layout/router, not business logic)
+- Extract custom hooks for reusable stateful logic (`src/hooks/useXxx.ts`)
+- Co-locate state with the component that owns it (game state in GameBoard, not App)
+- Keep parent components thin — pass callbacks, don't define handler logic inline
+- Props drilling beyond 2 levels suggests a need for context or hooks
+
+**Hook Extraction Guidelines:**
+- Extract logic into hooks when: shared by multiple components, complex enough to test independently, or mixing concerns in a single component
+- Each hook should have a typed return interface
+- Hooks import their own dependencies (analytics, APIs) directly
+
+**Material Design 3 (MUI v7):**
+- Use MUI `sx` props for styling, not separate CSS files
+- Follow MD3 color system via `ThemeProvider` and `createTheme`
+- Use MUI components (`Box`, `Stack`, `Button`, `Typography`) for layout and interaction
+- Leverage theme tokens (`text.primary`, `background.default`) instead of hardcoded colors
+
+**Vite Best Practices:**
+- Use `import.meta.env` for environment variables (never `process.env`)
+- Leverage code splitting via dynamic imports for large features
+- Keep barrel exports minimal to avoid tree-shaking issues
+- Use `100%` width/height, never `100vw` (includes scrollbar, causes overflow)
+
+**Review Checklist:**
+- [ ] No duplicated logic across components (check for orphaned files)
+- [ ] State lives in the component that owns it
+- [ ] No handler functions defined in parent that belong in child
+- [ ] Custom hooks are properly typed
+- [ ] No unused imports or dead code
+
+### 6. E2E Tests ✅
+
+After code review and architecture checks pass, run Playwright E2E tests:
+
+```bash
+cd cube-swipe
+npx playwright test
+```
+
+This generates screenshots across 4 device profiles (iPhone 14, Galaxy S24 Ultra, iPad 11th Gen, Galaxy Tab S10).
+
+**After E2E tests pass, review the generated screenshots for visual issues:**
+
+Open and inspect at least the Galaxy S24 Ultra screenshots (highest DPI, most likely to reveal problems):
+
+```
+cube-swipe/e2e/screenshots/Galaxy S24 Ultra/app-home.png
+cube-swipe/e2e/screenshots/Galaxy S24 Ultra/app-game.png
+cube-swipe/e2e/screenshots/Galaxy S24 Ultra/app-about.png
+cube-swipe/e2e/screenshots/Galaxy S24 Ultra/app-comments.png
+cube-swipe/e2e/screenshots/Galaxy S24 Ultra/app-light-mode.png
+cube-swipe/e2e/screenshots/Galaxy S24 Ultra/app-dark-mode.png
+```
+
+**Screenshot Review Checklist:**
+- [ ] Content is horizontally centered (no left/right shift)
+- [ ] Grid tiles are fully visible (not cut off at edges)
+- [ ] No horizontal or vertical scrolling (content fits viewport)
+- [ ] Version number (e.g. `v0.04`) is visible at the bottom
+- [ ] Text is readable in both light and dark mode (no white-on-white)
+- [ ] Buttons are properly sized and spaced
+- [ ] Back button and theme toggle are visible in top corners
+- [ ] Title "Cube Swipe 2048" is displayed on all screens
+
+If any issues are found, fix the code and re-run `npx playwright test` before committing.
+
+### 7. Pre-Commit Summary
 
 Before committing, ensure:
 - [ ] All tests pass (`npm test`)
@@ -347,5 +418,5 @@ Following these guidelines ensures high code quality and smooth collaboration be
 
 ---
 
-**Last Updated:** 2026-02-05
+**Last Updated:** 2026-02-06
 **For Questions:** See [CONTRIBUTING.md](../CONTRIBUTING.md) or [WORKFLOWS.md](WORKFLOWS.md)

@@ -7,9 +7,13 @@ vi.mock('../usePWAInstallTracking', () => ({
   usePWAInstallTracking: () => {},
 }))
 
-// Mock InstallPrompt component
-vi.mock('../InstallPrompt', () => ({
-  InstallPrompt: () => null,
+// Mock useInstallPrompt hook
+vi.mock('../hooks/useInstallPrompt', () => ({
+  useInstallPrompt: () => ({
+    isAppInstalled: false,
+    handleInstall: vi.fn(),
+    handleShare: vi.fn(),
+  }),
 }))
 
 // Mock analytics functions

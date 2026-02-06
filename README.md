@@ -70,14 +70,43 @@ This project was built from scratch to production deployment using Claude Code A
 - ✅ Environment variable management
 - ✅ **Result:** Smooth development workflow
 
+### 8. E2E Testing with Playwright
+- ✅ Multi-device screenshot generation (iPhone 14, Galaxy S24 Ultra, iPad 11th Gen, Galaxy Tab S10)
+- ✅ Device-accurate rendering with proper scale factors (`scale: 'device'`)
+- ✅ Organized screenshots in device-specific subfolders
+- ✅ Separated E2E tests from Vitest unit tests via config exclusions
+- ✅ Automated screenshot capture for home, game, about, comments, light-mode, and dark-mode views
+- ✅ **Result:** 20 E2E tests across 4 device profiles, visual regression baseline
+
+### 9. UI/UX & Component Architecture
+- ✅ Material Design 3 theming with light/dark mode toggle
+- ✅ Material UI v7 (`@mui/material`) component library integration
+- ✅ Extracted reusable components: `AboutSection`, `AppVersion`, `BackButton`, `ThemeToggle`, `GameBoard`, `LeaveCommentForm`, `FeedbackDialog`
+- ✅ Share button with Web Share API and clipboard fallback
+- ✅ Install button with PWA `beforeinstallprompt` event handling
+- ✅ Automatic install detection (`display-mode: standalone` + iOS standalone check)
+- ✅ Gradient-styled action buttons (Share, Install The App)
+- ✅ Google Apps Script integration for comment/feedback submission
+- ✅ Version display component visible on all screens
+- ✅ **Result:** Clean component architecture following MD3 guidelines
+
+### 10. Layout & CSS Architecture
+- ✅ Fixed `100vw` overflow bug (replaced with `100%` + `box-sizing: border-box`)
+- ✅ Eliminated horizontal and vertical scroll on all device sizes
+- ✅ Responsive grid layout constrained within viewport bounds
+- ✅ Consistent centering pattern across all views (home, game, about, comments)
+- ✅ Absolute-positioned top bar elements (Back button, theme toggle)
+- ✅ **Result:** Pixel-perfect layout across phones and tablets
+
 ## 🛠️ Tech Stack
 
 **Frontend:**
 - React 19.2
 - TypeScript 5.9
-- Vite 7.2
+- Vite 7.3
+- Material UI v7 (Material Design 3)
 - React Spring (animations)
-- Zustand (state management)
+- @use-gesture/react (swipe detection)
 
 **Build & Deploy:**
 - Azure Static Web Apps
@@ -86,9 +115,9 @@ This project was built from scratch to production deployment using Claude Code A
 - Terser (minification)
 
 **Testing:**
-- Vitest 4.0
+- Vitest 4.0 (unit tests)
 - React Testing Library
-- @testing-library/jest-dom
+- Playwright (E2E tests, multi-device screenshots)
 
 **Monitoring:**
 - Azure Application Insights
@@ -96,7 +125,7 @@ This project was built from scratch to production deployment using Claude Code A
 
 **Code Quality:**
 - ESLint
-- TypeScript
+- TypeScript (strict mode)
 - CodeQL (security scanning)
 
 ## 📁 Project Structure
@@ -110,15 +139,33 @@ This project was built from scratch to production deployment using Claude Code A
 │   │   └── pr-checks.yml
 │   ├── dependabot.yml      # Dependency updates
 │   ├── labeler.yml         # Auto PR labeling
+│   ├── AI_INSTRUCTIONS.md  # AI workflow guide
 │   └── WORKFLOWS.md        # Workflow documentation
 ├── cube-swipe/             # Main application
 │   ├── src/
+│   │   ├── components/     # Reusable UI components
+│   │   │   ├── AboutSection.tsx
+│   │   │   ├── AppVersion.tsx
+│   │   │   ├── BackButton.tsx
+│   │   │   ├── FeedbackDialog.tsx
+│   │   │   ├── GameBoard.tsx
+│   │   │   ├── LeaveCommentForm.tsx
+│   │   │   └── ThemeToggle.tsx
+│   │   ├── utils/          # Utility functions
 │   │   ├── analytics.ts    # Application Insights setup
 │   │   ├── test/           # Test utilities
-│   │   ├── App.tsx
+│   │   ├── App.tsx         # Root component & layout
 │   │   └── ...
+│   ├── e2e/
+│   │   ├── app.spec.ts     # Playwright E2E tests
+│   │   └── screenshots/    # Device screenshots
+│   │       ├── iPhone 14/
+│   │       ├── Galaxy S24 Ultra/
+│   │       ├── iPad 11th Gen/
+│   │       └── Galaxy Tab S10/
 │   ├── public/
 │   │   └── staticwebapp.config.json  # Azure SWA config
+│   ├── playwright.config.ts # Playwright config (4 devices)
 │   ├── vite.config.ts      # Vite + PWA config
 │   ├── vitest.config.ts    # Test configuration
 │   └── package.json
@@ -393,15 +440,20 @@ describe('MyComponent', () => {
 
 ## 🎯 Future Enhancements
 
-Potential improvements (great first issues!):
-- [ ] Add more comprehensive test coverage
-- [ ] Implement e2e tests with Playwright
+**Completed:**
+- [x] Implement E2E tests with Playwright (multi-device)
+- [x] Add social sharing features (Web Share API + clipboard fallback)
+- [x] Material Design 3 theming with dark mode
+
+**Planned:**
+- [ ] Implement full 2048 game logic (tile merging, scoring, win/lose conditions)
+- [ ] Add more comprehensive unit test coverage
 - [ ] Add performance budgets to CI
 - [ ] Create Storybook for component documentation
 - [ ] Add internationalization (i18n)
 - [ ] Implement advanced PWA features (push notifications)
-- [ ] Add social sharing features
 - [ ] Create leaderboard with backend
+- [ ] Add animations for tile movements and merges
 
 ## 📄 License
 
@@ -430,4 +482,4 @@ The entire journey from "empty repository" to "production deployment" was AI-ass
 
 **Built with ❤️ using AI-assisted development**
 
-*Last updated: 2026-02-05*
+*Last updated: 2026-02-06*

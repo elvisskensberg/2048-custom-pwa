@@ -1,13 +1,24 @@
+import { useState } from 'react'
 import { Box, Button, Typography } from '@mui/material'
 import { useGesture } from '@use-gesture/react'
 import { AppVersion } from './AppVersion'
 
-interface GameBoardProps {
-  grid: number[][]
-  onSwipe: (direction: 'left' | 'right' | 'up' | 'down') => void
-}
+const INITIAL_GRID: number[][] = [
+  [1, 1, 1, 1],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+  [0, 0, 0, 0],
+]
 
-export const GameBoard = ({ grid, onSwipe }: GameBoardProps) => {
+export const GameBoard = () => {
+  const [grid, setGrid] = useState<number[][]>(INITIAL_GRID)
+
+  const handleSwipe = (direction: 'left' | 'right' | 'up' | 'down') => {
+    console.log('Swipe detected:', direction)
+    // TODO: Implement 2048 game logic here
+    setGrid((prevGrid) => prevGrid)
+  }
+
   const bind = useGesture({
     onDrag: ({ movement: [mx, my], last }) => {
       if (!last) return
@@ -18,9 +29,9 @@ export const GameBoard = ({ grid, onSwipe }: GameBoardProps) => {
 
       if (absX > threshold || absY > threshold) {
         if (absX > absY) {
-          onSwipe(mx > 0 ? 'right' : 'left')
+          handleSwipe(mx > 0 ? 'right' : 'left')
         } else {
-          onSwipe(my > 0 ? 'down' : 'up')
+          handleSwipe(my > 0 ? 'down' : 'up')
         }
       }
     },
