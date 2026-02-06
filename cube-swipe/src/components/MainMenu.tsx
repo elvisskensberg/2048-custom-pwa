@@ -1,6 +1,7 @@
 import { Button, Stack } from '@mui/material'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
 import { AppVersion } from './AppVersion'
+import cvPdf from '../assets/Elvis Skensberg CV.pdf'
 
 interface MainMenuProps {
   onStartGame: () => void
@@ -10,6 +11,13 @@ interface MainMenuProps {
 
 export const MainMenu = ({ onStartGame, onOpenAbout, onOpenComments }: MainMenuProps) => {
   const { isAppInstalled, handleInstall, handleShare } = useInstallPrompt()
+
+  const handleDownloadCV = () => {
+    const link = document.createElement('a')
+    link.href = cvPdf
+    link.download = 'Elvis Skensberg CV.pdf'
+    link.click()
+  }
 
   return (
     <Stack spacing={1.2} alignItems="center" sx={{ width: '100%', maxWidth: 400, px: 2, pb: 8 }}>
@@ -89,6 +97,26 @@ export const MainMenu = ({ onStartGame, onOpenAbout, onOpenComments }: MainMenuP
           Install The App
         </Button>
       )}
+
+      <Button
+        variant="contained"
+        fullWidth
+        onClick={handleDownloadCV}
+        sx={{
+          py: 1.5,
+          fontSize: '1rem',
+          textTransform: 'none',
+          background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+          '&:hover': {
+            background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+            transform: 'translateY(-2px)',
+            boxShadow: '0 4px 12px rgba(56, 239, 125, 0.4)',
+          },
+        }}
+      >
+        Recruiter? Download my CV
+      </Button>
 
       <AppVersion />
     </Stack>

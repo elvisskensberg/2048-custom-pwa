@@ -12,6 +12,12 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
+  expect: {
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.03, // Allow 3% pixel difference for cross-platform rendering
+      threshold: 0.2, // Per-pixel color difference threshold
+    },
+  },
   projects: [
     {
       name: 'iPhone 14',
