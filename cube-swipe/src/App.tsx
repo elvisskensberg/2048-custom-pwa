@@ -6,6 +6,7 @@ import { trackDeviceInfo } from './analytics'
 import { BackButton } from './components/BackButton'
 import { ThemeToggle } from './components/ThemeToggle'
 import { MainMenu } from './components/MainMenu'
+import { GameModeSelect } from './components/GameModeSelect'
 import { GameBoard } from './components/GameBoard'
 import { LeaveCommentForm } from './components/LeaveCommentForm'
 import { AboutSection } from './components/AboutSection'
@@ -13,6 +14,7 @@ import { testGoogleScriptAPI } from './utils/testGoogleScript'
 
 function App() {
   const [gameStarted, setGameStarted] = useState(false)
+  const [gameMode, setGameMode] = useState<'classic' | 'fibonacci' | null>(null)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light')
@@ -43,13 +45,23 @@ function App() {
     }
   }, [])
 
-  const currentView = gameStarted
+  const currentView = gameStarted && gameMode
     ? 'game'
-    : aboutOpen
-      ? 'about'
-      : commentsOpen
-        ? 'comments'
-        : 'menu'
+    : gameStarted
+      ? 'modeSelect'
+      : aboutOpen
+        ? 'about'
+        : commentsOpen
+          ? 'comments'
+          : 'menu'
+
+  const handleBack = () => {
+    if (gameMode) {
+      setGameMode(null)
+    } else {
+      setGameStarted(false)
+    }
+  }
 
   return (
     <ThemeProvider theme={theme}>
@@ -66,7 +78,7 @@ function App() {
           overflow: 'hidden',
         }}
       >
-        {gameStarted && <BackButton onClick={() => setGameStarted(false)} />}
+        {gameStarted && <BackButton onClick={handleBack} />}
 
         <ThemeToggle
           themeMode={themeMode}
@@ -84,9 +96,10 @@ function App() {
             onOpenComments={() => setCommentsOpen(true)}
           />
         )}
+        {currentView === 'modeSelect' && <GameModeSelect onSelectMode={setGameMode} />}
         {currentView === 'about' && <AboutSection onClose={() => setAboutOpen(false)} />}
         {currentView === 'comments' && <LeaveCommentForm onClose={() => setCommentsOpen(false)} />}
-        {currentView === 'game' && <GameBoard />}
+        {currentView === 'game' && gameMode && <GameBoard gameMode={gameMode} />}
       </Box>
     </ThemeProvider>
   )

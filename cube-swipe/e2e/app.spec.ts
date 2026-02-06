@@ -7,10 +7,20 @@ test.describe('Cube Swipe 2048 App', () => {
     await page.screenshot({ path: `e2e/screenshots/${testInfo.project.name}/app-home.png`, fullPage: true, scale: 'device' })
   })
 
+  test('should navigate to game mode selection', async ({ page }, testInfo) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Start Game' }).click()
+    await expect(page.getByRole('button', { name: 'Play Original 2048' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Play Using Fibonacci Sequence' })).toBeVisible()
+    await page.screenshot({ path: `e2e/screenshots/${testInfo.project.name}/app-mode-select.png`, fullPage: true, scale: 'device' })
+  })
+
   test('should navigate to game screen', async ({ page }, testInfo) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'Start Game' }).click()
-    await expect(page.getByText('Swipe left, right, up, or down to play')).toBeVisible()
+    await page.getByRole('button', { name: 'Play Original 2048' }).click()
+    await expect(page.getByText('Swipe or double-tap edges to play')).toBeVisible()
+    await expect(page.getByText(/Score:/)).toBeVisible()
     await page.screenshot({ path: `e2e/screenshots/${testInfo.project.name}/app-game.png`, fullPage: true, scale: 'device' })
   })
 
