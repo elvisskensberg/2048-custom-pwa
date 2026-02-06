@@ -20,12 +20,12 @@ export const AboutSection = ({ onClose }: AboutSectionProps) => {
     >
       <Box sx={{ maxWidth: 600, textAlign: 'center' }}>
         <Typography variant="h5" gutterBottom sx={{ mb: 3, color: 'text.primary' }}>
-          About Cube Swipe 2048
+          About This Showcase
         </Typography>
         <Typography variant="body1" paragraph sx={{ mb: 2, color: 'text.primary' }}>
-          Cube Swipe 2048 is a modern take on the classic 2048 puzzle game.
+          This is a modern implementation of the classic 2048 puzzle game,
+          showcasing advanced web development skills and AI-assisted development workflows.
           Swipe in any direction to move the tiles and combine matching numbers.
-          The goal is to reach the 2048 tile!
         </Typography>
         <Typography variant="body1" paragraph sx={{ mb: 3, color: 'text.primary' }}>
           Built with React, Material Design 3, and PWA technology for a seamless

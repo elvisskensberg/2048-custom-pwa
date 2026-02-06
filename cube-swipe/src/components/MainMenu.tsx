@@ -31,7 +31,7 @@ export const MainMenu = ({ onStartGame, onOpenAbout, onOpenComments }: MainMenuP
           textTransform: 'none',
         }}
       >
-        Start Game
+        Play 2048
       </Button>
       <Button
         variant="outlined"
