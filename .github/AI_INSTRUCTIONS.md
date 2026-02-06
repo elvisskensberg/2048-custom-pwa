@@ -151,13 +151,42 @@ cube-swipe/e2e/screenshots/Galaxy S24 Ultra/app-dark-mode.png
 
 If any issues are found, fix the code and re-run `npx playwright test` before committing.
 
-### 7. Pre-Commit Summary
+### 7. Update Documentation ✅
+
+**After all checks pass, review if documentation needs updating:**
+
+**Update README.md if:**
+- New features were added (add to "Features" section)
+- New commands/scripts were added (add to "Development" section)
+- Project structure changed significantly (update "Project Structure")
+- Major architectural changes occurred (add to "Development History")
+- New environment variables or configuration required
+- Deployment process changed
+
+**Update other docs if:**
+- API endpoints changed → update API docs
+- Contributing guidelines affected → update CONTRIBUTING.md
+- Workflow instructions changed → update WORKFLOWS.md
+- Visual regression testing changed → update VISUAL_REGRESSION.md
+
+**Documentation Checklist:**
+- [ ] README.md reflects all user-facing changes
+- [ ] Code examples in docs still work with changes
+- [ ] Version numbers updated if applicable
+- [ ] "Last Updated" dates refreshed
+- [ ] Screenshots/GIFs updated if UI changed significantly
+
+**When to skip:** Minor bug fixes, internal refactoring, or changes that don't affect user-facing functionality typically don't need README updates.
+
+### 8. Pre-Commit Summary
 
 Before committing, ensure:
 - [ ] All tests pass (`npm test`)
 - [ ] No linting errors (`npm run lint`)
 - [ ] No type errors (`npm run type-check`)
 - [ ] Production build succeeds (`npm run build`)
+- [ ] E2E tests pass and screenshots reviewed (`npx playwright test`)
+- [ ] Documentation updated if needed (README.md, etc.)
 - [ ] Git commit message follows conventional commits
 
 ## Workflow Example
@@ -189,14 +218,24 @@ npm run type-check
 # 7. Verify build
 npm run build
 
-# 8. If all pass, commit
+# 8. Run E2E tests
+npx playwright test
+
+# 9. Review screenshots (if UI changes)
+# Check e2e/screenshots/Galaxy S24 Ultra/*.png
+
+# 10. Update documentation if needed
+# Edit README.md, add to Development History, etc.
+
+# 11. If all pass, commit
 cd ..
 git add .
 git commit -m "feat: add new feature
 
 - Implemented X
 - Added tests for Y
-- Fixed linting issues"
+- Fixed linting issues
+- Updated README with new feature"
 git push
 ```
 
@@ -318,11 +357,14 @@ When fixing code quality issues:
 
 ## Documentation
 
+**Documentation is now part of the mandatory pre-commit checklist (Step 7).**
+
 When making changes:
 - Update JSDoc comments if behavior changes
-- Update README if user-facing features change
-- Update this file if workflow changes
-- Add inline comments for complex logic
+- Update README.md if user-facing features change (see Step 7 checklist)
+- Update VISUAL_REGRESSION.md if E2E/screenshot process changes
+- Update this file (AI_INSTRUCTIONS.md) if workflow changes
+- Add inline comments for complex logic only (code should be self-documenting)
 
 ## Example: Complete Task Workflow
 
@@ -368,14 +410,27 @@ When making changes:
    # ✅ Build successful
    ```
 
-7. **Commit**
+7. **E2E tests**
+   ```bash
+   npx playwright test
+   # ✅ All 24 tests pass
+   # Review screenshots - reset button visible and centered
+   ```
+
+8. **Update documentation**
+   - Add "Reset Game" to README Features section
+   - Update screenshot showing reset button
+   - Note keyboard shortcut if added
+
+9. **Commit**
    ```bash
    git add .
    git commit -m "feat: add reset button to game
 
    - Add ResetButton component with tests
    - Connect to game state reset action
-   - Update UI layout to include button"
+   - Update UI layout to include button
+   - Update README with new feature"
    git push
    ```
 
@@ -411,8 +466,10 @@ When making changes:
 **Priority Order:**
 1. Tests passing (functionality works)
 2. Build succeeds (code compiles)
-3. Linting clean (code quality)
-4. Type-check clean (type safety)
+3. E2E tests pass (UI works across devices)
+4. Linting clean (code quality)
+5. Type-check clean (type safety)
+6. Documentation updated (if user-facing changes)
 
 Following these guidelines ensures high code quality and smooth collaboration between AI agents and human developers.
 

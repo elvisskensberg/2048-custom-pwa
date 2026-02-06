@@ -44,7 +44,7 @@ test.describe('Cube Swipe 2048 App', () => {
     await page.goto('/')
     await page.getByRole('button', { name: 'Start Game' }).click()
     await page.getByRole('button', { name: 'Play Original 2048' }).click()
-    await expect(page.getByText('Swipe or double-tap edges to play')).toBeVisible()
+    await expect(page.getByText('Swipe, double-tap edges, or use arrow keys to play')).toBeVisible()
     await expect(page.getByText(/Score:/)).toBeVisible()
 
     await page.screenshot({ path: `e2e/screenshots/${testInfo.project.name}/app-game.png`, fullPage: true, scale: 'device' })

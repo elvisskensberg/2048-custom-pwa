@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Box, Button, Typography } from '@mui/material'
 import { useGesture } from '@use-gesture/react'
 import { useGameLogic } from '../hooks/useGameLogic'
@@ -73,6 +74,35 @@ export const GameBoard = ({ gameMode }: GameBoardProps) => {
       }
     },
   })
+
+  // Keyboard controls
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (gameOver) return
+
+      switch (e.key) {
+        case 'ArrowUp':
+          e.preventDefault()
+          handleSwipe('up')
+          break
+        case 'ArrowDown':
+          e.preventDefault()
+          handleSwipe('down')
+          break
+        case 'ArrowLeft':
+          e.preventDefault()
+          handleSwipe('left')
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          handleSwipe('right')
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [gameOver, handleSwipe])
 
   return (
     <Box
@@ -162,7 +192,7 @@ export const GameBoard = ({ gameMode }: GameBoardProps) => {
       </Box>
 
       <Typography variant="body2" sx={{ mt: 4, color: 'text.secondary' }}>
-        Swipe or double-tap edges to play
+        Swipe, double-tap edges, or use arrow keys to play
       </Typography>
 
       <AppVersion />
