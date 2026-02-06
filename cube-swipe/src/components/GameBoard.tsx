@@ -32,11 +32,8 @@ export const GameBoard = ({ grid, onSwipe }: GameBoardProps) => {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
         width: '100%',
-        maxWidth: 600,
         px: 2,
-        pb: 8,
       }}
     >
       <Box
@@ -44,8 +41,8 @@ export const GameBoard = ({ grid, onSwipe }: GameBoardProps) => {
         sx={{
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 2,
-          maxWidth: 500,
+          gap: 1,
+          maxWidth: 400,
           width: '100%',
           touchAction: 'none',
           userSelect: 'none',

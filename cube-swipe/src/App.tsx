@@ -152,18 +152,14 @@ function App() {
       <Box
         sx={{
           height: '100vh',
-          width: '100vw',
+          width: '100%',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'flex-start',
           bgcolor: 'background.default',
-          padding: { xs: 1, sm: 1.5 },
-          paddingTop: { xs: 8, sm: 10 },
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          overflow: 'auto',
+          pt: { xs: 8, sm: 10 },
+          overflow: 'hidden',
         }}
       >
         {gameStarted && <BackButton onClick={goBack} />}
