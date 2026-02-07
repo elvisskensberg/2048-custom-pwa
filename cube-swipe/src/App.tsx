@@ -78,31 +78,37 @@ function App() {
           alignItems: 'center',
           justifyContent: 'flex-start',
           bgcolor: 'background.default',
-          pt: { xs: 8, sm: 10 },
+          pt: aboutOpen ? 0 : { xs: 8, sm: 10 },
           overflow: 'hidden',
         }}
       >
-        {(gameStarted || aboutOpen || commentsOpen) && <BackButton onClick={handleBack} />}
+        {!aboutOpen && (gameStarted || commentsOpen) && (
+          <BackButton onClick={handleBack} />
+        )}
 
-        <ThemeToggle
-          themeMode={themeMode}
-          onToggle={() => setThemeMode((prev) => (prev === 'light' ? 'dark' : 'light'))}
-        />
+        {!aboutOpen && (
+          <ThemeToggle
+            themeMode={themeMode}
+            onToggle={() => setThemeMode((prev) => (prev === 'light' ? 'dark' : 'light'))}
+          />
+        )}
 
-        <Typography
-          variant="h3"
-          component="h1"
-          gutterBottom
-          sx={{
-            mb: 1.5,
-            mt: 0,
-            color: 'text.primary',
-            textAlign: 'center',
-            lineHeight: 1.2
-          }}
-        >
-          Elvis<br />Skensberg<br />AI Showcase
-        </Typography>
+        {!aboutOpen && (
+          <Typography
+            variant="h3"
+            component="h1"
+            gutterBottom
+            sx={{
+              mb: 1.5,
+              mt: 0,
+              color: 'text.primary',
+              textAlign: 'center',
+              lineHeight: 1.2
+            }}
+          >
+            Elvis<br />Skensberg<br />AI Showcase
+          </Typography>
+        )}
 
         {currentView === 'menu' && (
           <MainMenu

@@ -18,7 +18,8 @@ const doc = new PDFDocument({
 
 // Output file path
 const outputPath = path.join(__dirname, 'elvis-ai-showcase.pdf');
-doc.pipe(fs.createWriteStream(outputPath));
+const writeStream = fs.createWriteStream(outputPath);
+doc.pipe(writeStream);
 
 // Add each page
 pages.forEach((page, index) => {
@@ -36,9 +37,12 @@ pages.forEach((page, index) => {
 
 doc.end();
 
-console.log('\n✅ PDF generated successfully!');
-console.log(`📄 Output: ${outputPath}`);
-console.log(`📊 Total pages: ${pages.length}`);
-console.log('\nFile details:');
-const stats = fs.statSync(outputPath);
-console.log(`   Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+// Wait for the PDF to finish writing
+writeStream.on('finish', () => {
+  console.log('\n✅ PDF generated successfully!');
+  console.log(`📄 Output: ${outputPath}`);
+  console.log(`📊 Total pages: ${pages.length}`);
+  console.log('\nFile details:');
+  const stats = fs.statSync(outputPath);
+  console.log(`   Size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+});
