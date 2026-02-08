@@ -5,6 +5,7 @@ import { usePWAInstallTracking } from './usePWAInstallTracking'
 import { trackDeviceInfo } from './analytics'
 import { BackButton } from './components/BackButton'
 import { ThemeToggle } from './components/ThemeToggle'
+import { UpdatePrompt } from './components/UpdatePrompt'
 import { MainMenu } from './components/MainMenu'
 import { GameModeSelect } from './components/GameModeSelect'
 import { GameBoard } from './components/GameBoard'
@@ -69,6 +70,7 @@ function App() {
 
   return (
     <ThemeProvider theme={theme}>
+      <UpdatePrompt />
       <Box
         sx={{
           height: '100vh',
