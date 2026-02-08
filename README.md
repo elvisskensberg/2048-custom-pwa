@@ -2,6 +2,8 @@
 
 A 3D swipe-based 2048 game built with React, TypeScript, and Vite. This project demonstrates a complete production-ready setup using AI-assisted development with Claude Code.
 
+**Current Version:** v0.11
+
 **🌐 Quick Access:**
 - **Production:** https://thankful-sky-020f0c103.4.azurestaticapps.net
 - **Local Dev:** http://localhost:5173 (run `npm run dev` in `cube-swipe/`)
@@ -15,7 +17,8 @@ This project was built from scratch to production deployment using Claude Code A
 ### 1. Production Build Optimization
 
 - ✅ **Vite Configuration**: Production-optimized build configuration
-- ✅ **PWA**: Service worker caching with offline support
+- ✅ **PWA**: Service worker caching with offline support, automatic update checks
+- ✅ **Smart Updates**: Periodic checks (30 min) + focus-based detection for mobile
 - ✅ **Code Splitting**: React vendor chunks, animation chunks, and main chunks
 - ✅ **Terser Minification**: JavaScript minification with console removal
 - ✅ **Asset Caching**: Optimized caching strategies
@@ -154,7 +157,8 @@ This project was built from scratch to production deployment using Claude Code A
 │   │   │   ├── FeedbackDialog.tsx
 │   │   │   ├── GameBoard.tsx
 │   │   │   ├── LeaveCommentForm.tsx
-│   │   │   └── ThemeToggle.tsx
+│   │   │   ├── ThemeToggle.tsx
+│   │   │   └── UpdatePrompt.tsx
 │   │   ├── utils/          # Utility functions
 │   │   ├── analytics.ts    # Application Insights setup
 │   │   ├── test/           # Test utilities
@@ -305,6 +309,20 @@ customEvents
 
 These metrics help measure PWA adoption and user engagement.
 
+### PWA Update Detection
+
+The app features intelligent update detection for mobile devices:
+
+**Update Checking:**
+- **Periodic Checks**: Automatically checks for updates every 30 minutes while app is open
+- **Focus-Based Detection**: Checks immediately when user returns to app (switches back from another app)
+- **User Prompt**: Shows update notification when new version is available
+
+**Benefits:**
+- Mobile users see updates within 30 minutes maximum
+- No need to manually clear cache or reinstall
+- Seamless update experience across all devices
+
 See [analytics.usage.md](cube-swipe/src/analytics.usage.md) for detailed usage.
 
 ## 🔒 Security
@@ -448,6 +466,7 @@ describe('MyComponent', () => {
 - [x] Implement E2E tests with Playwright (multi-device)
 - [x] Add social sharing features (Web Share API + clipboard fallback)
 - [x] Material Design 3 theming with dark mode
+- [x] Intelligent PWA update detection (periodic + focus-based)
 
 **Planned:**
 - [ ] Implement full 2048 game logic (tile merging, scoring, win/lose conditions)
@@ -486,4 +505,4 @@ The entire journey from "empty repository" to "production deployment" was AI-ass
 
 **Built with ❤️ using AI-assisted development**
 
-*Last updated: 2026-02-06*
+*Last updated: 2026-02-08*
