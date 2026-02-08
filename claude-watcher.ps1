@@ -30,9 +30,10 @@ while($true) {
 
         # Start Claude as a background job
         $job = Start-Job -ScriptBlock {
-            param($Path, $Instruction)
+            param($Path, $ProjectDir, $Instruction)
+            Set-Location $ProjectDir
             & $Path -p "Read $Instruction and implement the requested changes. Reference CLAUDE.md for rules." --dangerously-skip-permissions
-        } -ArgumentList $ClaudePath, $InstructionFile
+        } -ArgumentList $ClaudePath, $ProjectRoot, $InstructionFile
 
         # Show progress while Claude is running
         $dots = 0
