@@ -31,7 +31,9 @@
       "Bash(git add:*)",
       "Bash(npm test:*)",
       "WebFetch(domain:thankful-sky-020f0c103.4.azurestaticapps.net)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)"
     ]
   }
 }
