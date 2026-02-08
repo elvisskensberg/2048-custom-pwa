@@ -1,4 +1,1 @@
-Bump version from v0.10 to v0.11
-
-Update AppVersion.tsx and CLAUDE.md to display v0.11.
-Follow the Pre-Commit Checklist in CLAUDE.md including E2E screenshot updates.
+about section with slides atm only works for 1:1 ratio. Add mobile and tablet view layouts using M3 while preserving 1:1 ratio and add screenshots for them too in e2e tests.
