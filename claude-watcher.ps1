@@ -1,3 +1,4 @@
+// Test task
 # --- Configuration ---
 $ProjectRoot = "C:\Code\2048-custom-pwa"
 $InstructionFile = "TODO.md"
