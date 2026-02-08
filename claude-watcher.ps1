@@ -1,9 +1,5 @@
-// Test task
-// Line 1 test
 # --- Configuration ---
-// Line 2 test
 $ProjectRoot = "C:\Code\2048-custom-pwa"
-// Line 3 test
 $InstructionFile = "TODO.md"
 $ClaudePath = "C:\Users\esken\.local\bin\claude.exe"
 $NormalPollSeconds = 30      # Normal: check every 30 seconds
