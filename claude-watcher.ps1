@@ -37,7 +37,9 @@ while($true) {
         $job = Start-Job -ScriptBlock {
             param($Path, $ProjectDir, $Instruction)
             Set-Location $ProjectDir
-            & $Path -p "Read $Instruction and implement the requested changes. Reference CLAUDE.md for rules." --dangerously-skip-permissions
+            Write-Output "Working directory: $(Get-Location)"
+            Write-Output "Running: $Path -p 'Read $Instruction...'"
+            & $Path -p "Read $Instruction and implement the requested changes. Reference CLAUDE.md for rules." --dangerously-skip-permissions 2>&1
         } -ArgumentList $ClaudePath, $ProjectRoot, $InstructionFile
 
         # Show progress while Claude is running
@@ -57,23 +59,33 @@ while($true) {
         # Show Claude output if any
         if ($result) {
             Write-Host $result -ForegroundColor White
+        } else {
+            Write-Host "Warning: No output from Claude!" -ForegroundColor Red
         }
 
-        # 4. Push results back so you can see them on your phone
+        # 4. Check if there are changes to commit
+        $changesExist = git status --porcelain
+        if (-not $changesExist) {
+            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] ERROR: Claude ran but made no changes!" -ForegroundColor Red
+            Write-Host "Skipping commit. TODO.md NOT cleared. Check the task and try again." -ForegroundColor Yellow
+            continue
+        }
+
+        # Push results back so you can see them on your phone
         Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Committing changes..." -ForegroundColor Cyan
         git add .
-        git commit -m "AI: Task completed from mobile instruction" --quiet
+        git commit -m "AI: Task completed from mobile instruction"
 
         Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Pushing to GitHub..." -ForegroundColor Cyan
-        git push origin main --quiet
+        git push origin main
 
         Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Task complete. Changes pushed to GitHub." -ForegroundColor Green
 
         # Clear the instruction file to prevent re-running the same task
         Clear-Content $InstructionFile
         git add $InstructionFile
-        git commit -m "Clear TODO.md after task completion" --quiet
-        git push origin main --quiet
+        git commit -m "Clear TODO.md after task completion"
+        git push origin main
         Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Cleared $InstructionFile - ready for next task." -ForegroundColor Cyan
     }
 
