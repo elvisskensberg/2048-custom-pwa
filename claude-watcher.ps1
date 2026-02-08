@@ -1,9 +1,14 @@
 # --- Configuration ---
+$ProjectRoot = "C:\Code\2048-custom-pwa"
 $InstructionFile = "TODO.md"
 $ClaudePath = "C:\Users\esken\.local\bin\claude.exe"
 $PollIntervalSeconds = 30
 
+# Change to project directory
+Set-Location $ProjectRoot
+
 Write-Host "--- Claude Remote Watcher Active ---" -ForegroundColor Cyan
+Write-Host "Working Directory: $ProjectRoot"
 Write-Host "Monitoring: $InstructionFile"
 Write-Host "Timezone: Jerusalem (Bet Shemesh)"
 
@@ -22,7 +27,31 @@ while($true) {
         # 3. Run Claude in 'YOLO' mode
         # -p passes the prompt, --dangerously-skip-permissions bypasses all 'Yes/No' prompts
         Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Running Claude Code..." -ForegroundColor Cyan
-        & $ClaudePath -p "Read $InstructionFile and implement the requested changes. Reference CLAUDE.md for rules." --dangerously-skip-permissions
+
+        # Start Claude as a background job
+        $job = Start-Job -ScriptBlock {
+            param($Path, $Instruction)
+            & $Path -p "Read $Instruction and implement the requested changes. Reference CLAUDE.md for rules." --dangerously-skip-permissions
+        } -ArgumentList $ClaudePath, $InstructionFile
+
+        # Show progress while Claude is running
+        $dots = 0
+        while ($job.State -eq 'Running') {
+            $dots = ($dots + 1) % 4
+            $dotString = "." * $dots
+            Write-Host "`r[$(Get-Date -Format 'HH:mm:ss')] Claude is working$dotString   " -NoNewline -ForegroundColor Gray
+            Start-Sleep -Seconds 2
+        }
+        Write-Host ""  # New line after progress
+
+        # Get the result
+        $result = Receive-Job -Job $job -Wait
+        Remove-Job -Job $job
+
+        # Show Claude output if any
+        if ($result) {
+            Write-Host $result -ForegroundColor White
+        }
 
         # 4. Push results back so you can see them on your phone
         Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Committing changes..." -ForegroundColor Cyan
