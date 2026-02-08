@@ -62,6 +62,13 @@ while($true) {
         git push origin main --quiet
 
         Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Task complete. Changes pushed to GitHub." -ForegroundColor Green
+
+        # Clear the instruction file to prevent re-running the same task
+        Clear-Content $InstructionFile
+        git add $InstructionFile
+        git commit -m "Clear TODO.md after task completion" --quiet
+        git push origin main --quiet
+        Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Cleared $InstructionFile - ready for next task." -ForegroundColor Cyan
     }
 
     # Wait for the next check
