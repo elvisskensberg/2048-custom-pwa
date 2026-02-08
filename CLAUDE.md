@@ -89,15 +89,100 @@ npm run preview          # Preview production build
 
 ## Pre-Commit Checklist
 
-Run in order — all must pass before committing:
+**Run in order — all must pass before committing:**
 
-1. `npm test`
-2. `npm run lint` (use `lint:fix` first)
-3. `npm run type-check`
-4. `npm run build`
-5. `npm run test:e2e` (if UI changed)
+### 1. Unit Tests ✅
+```bash
+npm test
+```
+- All existing tests must pass
+- New features should have tests
+- Bug fixes should include regression tests
+- If tests fail: fix code or update tests, then re-run
 
-See `.github/AI_INSTRUCTIONS.md` for the full post-task checklist including screenshot review.
+### 2. Linting ✅
+```bash
+npm run lint
+npm run lint:fix  # Auto-fix first
+```
+- Common issues: unused imports, `any` types, missing return types
+- Use `unknown` instead of `any`
+- Never disable rules without justification
+
+### 3. Type Checking ✅
+```bash
+npm run type-check
+```
+- Fix type errors (avoid `@ts-ignore`)
+- Add proper type annotations
+- Use `unknown` instead of `any`
+
+### 4. Production Build ✅
+```bash
+npm run build
+```
+- Must succeed for deployment (blocking in CI)
+- Fix TypeScript or import issues if it fails
+- Verify bundle size is reasonable
+
+### 5. Code Review ✅
+
+**React Component Patterns:**
+- Single responsibility per component
+- Extract hooks for reusable logic (`src/hooks/useXxx.ts`)
+- State co-located with owning component
+- No handler functions defined in parents that belong in children
+
+**Hook Extraction Guidelines:**
+- Extract when: shared by multiple components, complex enough to test independently
+- Each hook has typed return interface
+- Hooks import dependencies directly
+
+### 6. E2E Tests ✅
+```bash
+npm run test:e2e
+```
+- Generates 150+ screenshots across 5 device profiles
+- Review Galaxy S24 Ultra screenshots (highest DPI):
+  - `e2e/screenshots/Galaxy S24 Ultra/app-*.png`
+
+**Screenshot Review Checklist:**
+- [ ] Content horizontally centered
+- [ ] No content cutoff at edges
+- [ ] No scrolling (content fits viewport)
+- [ ] Version number visible
+- [ ] Text readable in both themes
+- [ ] Buttons properly sized and spaced
+
+### 7. Update Documentation ✅
+
+**Update README.md if:**
+- New features added
+- Commands/scripts changed
+- Project structure changed
+- Deployment process changed
+
+### 8. Commit Message ✅
+
+Use Conventional Commits format:
+```
+<type>(<scope>): <subject>
+
+<body>
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
+```
+
+**Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `ci`
+
+**Example:**
+```
+feat(analytics): add game event tracking
+
+- Add trackEvent calls for game start/end
+- Track high scores
+- Include game duration metrics
+```
 
 ## Code Conventions
 
@@ -410,9 +495,136 @@ npm run dev              # http://localhost:5173
 - PR → Preview deployment with comment
 - All quality checks run in CI
 
+## Code Quality Standards
+
+### Testing
+- Write tests for all new features
+- Use descriptive test names (what it does, not how)
+- Follow Arrange-Act-Assert pattern
+- Test edge cases and error conditions
+- Mock external dependencies in `src/test/setup.ts`
+
+### Code Style
+- TypeScript strict mode always
+- Prefer `const` over `let`
+- Arrow functions for callbacks
+- Destructure props and objects
+- Meaningful variable names
+- Small, focused functions
+
+### Type Safety
+- Never use `any` (use `unknown` or specific types)
+- Define interfaces for complex objects
+- Use union types for multiple possibilities
+- Leverage TypeScript's type inference
+- Add return type annotations to all functions
+
+### Error Handling
+- Always handle errors in async functions
+- Use try-catch appropriately
+- Log errors to Application Insights in production
+- Provide meaningful error messages
+- Don't swallow errors silently
+
+## AI-Specific Guidelines
+
+### When to Skip Auto-Fixing
+
+**Do NOT auto-fix in these cases:**
+1. User explicitly said not to
+2. Changes would be too extensive (>100 files)
+3. Fixing requires architectural changes
+4. Tests are intentionally failing (TDD red phase)
+
+In these cases, inform the user and ask for guidance.
+
+### When to Update Tests
+
+**Update tests when:**
+- API interfaces change
+- Component props change
+- Function signatures change
+- Behavior intentionally changes
+
+**Create new tests when:**
+- Adding new features
+- Fixing bugs (regression tests)
+- Covering previously untested code paths
+
+### Reporting Issues
+
+If unable to fix automatically:
+1. Clearly describe what's failing
+2. Show error messages
+3. Suggest potential fixes
+4. Ask for user guidance
+
+## Workflow Example
+
+```bash
+# After making code changes in cube-swipe/:
+
+# 1. Run tests
+npm test
+
+# 2. Fix any failures, then verify
+npm test
+
+# 3. Run linting
+npm run lint
+npm run lint:fix    # Auto-fix what's possible
+
+# 4. Type check
+npm run type-check
+
+# 5. Verify build
+npm run build
+
+# 6. Run E2E tests (if UI changed)
+npm run test:e2e
+
+# 7. Review screenshots
+# Check e2e/screenshots/Galaxy S24 Ultra/*.png
+
+# 8. Update documentation if needed
+# Edit README.md if user-facing changes
+
+# 9. Commit with conventional format
+cd ..
+git add .
+git commit -m "feat: add new feature
+
+- Implemented X
+- Added tests for Y
+- Updated README
+
+Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
+git push origin main
+```
+
 ## Troubleshooting
 
 ### Common Issues
+
+**Tests won't pass:**
+1. Check if environment is set up: `npm install`
+2. Look for missing dependencies
+3. Check for async timing issues
+4. Verify mocks properly configured in `src/test/setup.ts`
+5. Read test error output carefully
+
+**Linting won't fix:**
+1. Some rules can't be auto-fixed
+2. Read specific rule documentation
+3. Fix manually based on error description
+4. Never disable rules without good reason
+
+**Build fails:**
+1. Usually TypeScript errors
+2. Check import paths
+3. Verify all dependencies installed
+4. Look for circular dependencies
+5. Check environment variable usage (`import.meta.env.VITE_*`)
 
 **PWA not updating:**
 - Check browser DevTools → Application → Service Workers
@@ -434,3 +646,29 @@ npm run dev              # http://localhost:5173
 - Check bundle analysis output
 - Review new dependencies
 - Consider code splitting opportunities
+
+## CI/CD Expectations
+
+The GitHub Actions pipeline runs:
+1. **Linting** (non-blocking, shows warnings)
+2. **Type checking** (non-blocking, shows warnings)
+3. **Tests** (non-blocking currently)
+4. **Build** (BLOCKING - must pass for deployment)
+
+While lint and type-check are non-blocking in CI, always fix these issues locally before committing to maintain code quality.
+
+## Golden Rules
+
+1. **Never commit code that fails tests, linting, or builds** (unless explicitly instructed)
+2. **Single source of truth**: CLAUDE.md contains all project documentation and workflow guidelines
+3. **Professional tone**: No humor in user-facing content
+4. **Type safety**: Never use `any` (use `unknown` or specific types)
+5. **Test coverage**: All new features and bug fixes have tests
+
+**Priority Order:**
+1. Tests passing (functionality works)
+2. Build succeeds (code compiles)
+3. E2E tests pass (UI works across devices)
+4. Linting clean (code quality)
+5. Type-check clean (type safety)
+6. Documentation updated (if user-facing changes)
