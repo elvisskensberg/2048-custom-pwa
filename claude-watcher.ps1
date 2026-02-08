@@ -24,6 +24,11 @@ while($true) {
 
         Write-Host "[$(Get-Date -Format 'HH:mm:ss')] New instructions found! Executing Claude..." -ForegroundColor Yellow
 
+        # Log usage for cost tracking
+        $taskPreview = (Get-Content $InstructionFile -TotalCount 1 -ErrorAction SilentlyContinue) ?? "No preview"
+        $logEntry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Claude invoked | Task: $taskPreview"
+        Add-Content -Path "claude-usage.log" -Value $logEntry
+
         # 3. Run Claude in 'YOLO' mode
         # -p passes the prompt, --dangerously-skip-permissions bypasses all 'Yes/No' prompts
         Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Running Claude Code..." -ForegroundColor Cyan
