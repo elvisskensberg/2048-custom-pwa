@@ -23,6 +23,12 @@ while($true) {
 
         Write-Host "[$(Get-Date -Format 'HH:mm:ss')] New instructions found! Executing Claude..." -ForegroundColor Yellow
 
+        # Show task preview
+        $taskContent = Get-Content $InstructionFile -Raw
+        Write-Host "Task:" -ForegroundColor Cyan
+        Write-Host $taskContent -ForegroundColor White
+        Write-Host "---" -ForegroundColor Gray
+
         $job = Start-Job -ScriptBlock {
             param($Path, $ProjectDir, $Instruction)
             Set-Location $ProjectDir
