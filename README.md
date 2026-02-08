@@ -8,130 +8,99 @@ A 3D swipe-based 2048 game built with React, TypeScript, and Vite. This project 
 
 > **Note:** This entire project infrastructure—from Azure resources to CI/CD pipelines—was set up through AI assistance, showcasing modern development workflows with AI collaboration.
 
-## 🤖 AI-Assisted Setup Journey
+## 🤖 AI-Assisted Development
 
-This project was built from scratch to production deployment using Claude Code AI assistance. Here's what was accomplished:
+This project was built from scratch to production deployment using Claude Code AI assistance.
 
-### 1. Production Build Optimization (Making It Fast™)
-"Can we make it smaller?" — every developer ever. Spoiler: yes.
+### 1. Production Build Optimization
 
-- ✅ **Vite Configuration**: Configured with production optimizations (because dev builds are for chumps)
-- ✅ **PWA Magic**: Service worker caching + offline support (works without internet, like a real app)
-- ✅ **Code Splitting**: React vendor chunks, animation chunks, main chunks (divide and conquer)
-- ✅ **Terser Minification**: Squashed JavaScript + removed console.logs (your debugging secrets are safe)
-- ✅ **Asset Caching**: Optimized strategies (cache everything except bugs)
-- ✅ **Result:** **195 KB total**, **57 KB gzipped** main bundle (lighter than your average npm package)
+- ✅ **Vite Configuration**: Production-optimized build configuration
+- ✅ **PWA**: Service worker caching with offline support
+- ✅ **Code Splitting**: React vendor chunks, animation chunks, and main chunks
+- ✅ **Terser Minification**: JavaScript minification with console removal
+- ✅ **Asset Caching**: Optimized caching strategies
+- ✅ **Result:** **195 KB total**, **57 KB gzipped** main bundle
 
-*Fun fact: The entire app is smaller than most company logos on corporate websites.*
+### 2. Azure Cloud Infrastructure
 
-### 2. Azure Cloud Infrastructure (The Microsoft Money Pit)
-Cloud infrastructure setup is usually a 47-step process involving clicking through Azure Portal wizards. We did it through conversation instead.
+- ✅ **Static Web App**: Azure Static Web Apps deployment
+- ✅ **Application Insights**: Real-time monitoring and analytics
+- ✅ **Resource Group**: Organized in West Europe region
+- ✅ **Deployment Tokens**: Secure token management via GitHub Secrets
+- ✅ **Result:** Live at https://thankful-sky-020f0c103.4.azurestaticapps.net
 
-- ✅ **Static Web App**: Created `2048-custom-pwa` in Azure (serverless hosting that actually works)
-- ✅ **Application Insights**: Monitoring setup (know when things break before users tweet about it)
-- ✅ **Resource Group**: Organized in West Europe (because latency matters, apparently)
-- ✅ **Deployment Tokens**: Secure token management via GitHub Secrets (no hardcoded passwords here)
-- ✅ **Result:** Live at https://thankful-sky-020f0c103.4.azurestaticapps.net (Azure generates great subdomain names)
+### 3. GitHub Actions CI/CD Pipeline
 
-*Reality check: This would normally take 3 hours of clicking, reading docs, and Stack Overflow. AI did it in a conversation.*
+- ✅ **Multi-Stage Workflow**: Quality checks → build → deploy
+- ✅ **Automated Testing**: Linting, type-checking, and unit tests
+- ✅ **PR Previews**: Automated preview deployments with status comments
+- ✅ **Security Scanning**: CodeQL and npm audit integration
+- ✅ **Bundle Analysis**: Automated bundle size tracking
+- ✅ **Dependabot**: Automated dependency updates
+- ✅ **Result:** Fully automated deployment on every push to main
 
-### 3. GitHub Actions CI/CD Pipeline (Robots Deploying Robots)
-Every push triggers an elaborate dance of automated checks. If it passes, deploy. If not, shame the developer (kidding).
+### 4. Testing Infrastructure
 
-- ✅ **Multi-Stage Workflow**: Quality checks → build → deploy (fail fast, succeed faster)
-- ✅ **Automated Everything**: Linting, type-checking, testing (humans are bad at repetitive tasks)
-- ✅ **PR Previews**: Every pull request gets its own URL + auto-comment (impress code reviewers)
-- ✅ **Security Scanning**: CodeQL + npm audit (catching vulnerabilities before hackers do)
-- ✅ **Bundle Analysis**: Tracks size changes (because bloat is the enemy)
-- ✅ **Dependabot**: Auto-PRs for dependency updates (staying current = staying secure)
-- ✅ **Result:** **Fully automated deployment** on every push to main (zero-touch deployments are chef's kiss)
+- ✅ **Vitest + React Testing Library**: Fast unit testing framework
+- ✅ **Test Coverage**: Comprehensive coverage reporting
+- ✅ **CI Integration**: Automated test execution in pipeline
+- ✅ **Test Utilities**: Reusable setup helpers and mock factories
+- ✅ **Result:** Production-ready testing infrastructure
 
-*Developer happiness metric: Push to main at 5pm Friday. Live in production by 5:02pm. Go home stress-free.*
+### 5. Monitoring & Analytics
 
-### 4. Testing Infrastructure (Trust But Verify)
-"It works on my machine" isn't a deployment strategy. Here's the safety net:
+- ✅ **Application Insights Integration**: Azure Application Insights for telemetry
+- ✅ **Auto-Tracking**: Automatic page view and error tracking
+- ✅ **Custom Events**: trackEvent, trackMetric, and trackException APIs
+- ✅ **PWA Install Tracking**: Monitors installation prompts and completions
+- ✅ **Environment Modes**: Development console logs and production telemetry
+- ✅ **Result:** Real-time insights into user behavior and application performance
 
-- ✅ **Vitest + React Testing Library**: Fast unit tests (Jest but actually fast)
-- ✅ **Test Coverage**: Reports what's tested vs. what's yolo (currently: mostly yolo)
-- ✅ **CI Integration**: Non-blocking tests (show failures, don't stop the world)
-- ✅ **Test Utilities**: Setup helpers and mock factories (because boilerplate is boring)
-- ✅ **Result:** Ready for **TDD workflow** (write test, watch it fail, make it pass, refactor, repeat)
+### 6. Security & Best Practices
 
-*Current test count: 1. Current test coverage: optimistic. Future test coverage: TBD when we stop procrastinating.*
+- ✅ **Smart .gitignore**: Prevents credential leaks in version control
+- ✅ **SECURITY.md**: Documented vulnerability disclosure process
+- ✅ **Secret Management**: Clear separation of public and sensitive data
+- ✅ **GitHub Secrets**: Encrypted secret storage for CI/CD
+- ✅ **Automated Scanning**: Weekly CodeQL and npm audit scans
+- ✅ **Result:** Production-ready security implementation
 
-### 5. Monitoring & Analytics (Big Brother, But Helpful)
-Can't improve what you don't measure. Can't fix what you don't know is broken.
+### 7. Developer Experience
 
-- ✅ **Application Insights Integration**: React plugin connected to Azure (all the telemetry)
-- ✅ **Auto-Tracking**: Page views + errors caught automatically (no manual logging required)
-- ✅ **Custom Events**: trackEvent, trackMetric, trackException (instrument all the things)
-- ✅ **PWA Install Tracking**: Monitors install prompts, completions, and standalone launches (measure adoption)
-- ✅ **Environment Modes**: Console logs in dev, Azure telemetry in prod (debug locally, monitor globally)
-- ✅ **Result:** **Real-time insights** into user behavior, performance, and errors (data-driven decisions FTW)
+- ✅ **Non-Blocking Checks**: Warnings visible without blocking deployment
+- ✅ **Vite HMR**: Hot module reload under 100ms
+- ✅ **Comprehensive Scripts**: Full npm script suite for all workflows
+- ✅ **Environment Management**: Clear .env configuration with documentation
+- ✅ **Result:** Streamlined development workflow
 
-*Analytics insight: We now know 3 people installed this app. Two of them were testing. The third is a mystery.*
+### 8. E2E Testing with Playwright
 
-### 6. Security & Best Practices (Keeping Secrets Secret)
-Security through obscurity is not security. Security through actual security is security.
+- ✅ **Multi-Device Testing**: 5 device profiles (iPhone 14, Galaxy S24 Ultra, iPad 11th Gen, Galaxy Tab S10, Square-1080p)
+- ✅ **Accurate Rendering**: Device-specific scale factors and viewport sizes
+- ✅ **Organized Screenshots**: Device-specific folders for visual regression testing
+- ✅ **Test Isolation**: Separate Playwright configuration from unit tests
+- ✅ **Comprehensive Coverage**: 30 E2E tests generating 150+ screenshots
+- ✅ **Result:** Complete end-to-end testing across all platforms
 
-- ✅ **Smart .gitignore**: Catches secrets before they hit the repo (no API keys in version control)
-- ✅ **SECURITY.md**: Vulnerability disclosure process (white hats welcome, black hats please leave)
-- ✅ **Safe vs. Secret**: Clear distinction (connection string = safe, deployment token = secret)
-- ✅ **GitHub Secrets**: Deployment tokens locked in secure vault (encrypted at rest, used in CI)
-- ✅ **Automated Scanning**: Weekly CodeQL + npm audit (robots finding vulnerabilities 24/7)
-- ✅ **Result:** **Production-ready security** posture (sleep well at night)
+### 9. UI/UX & Component Architecture
 
-*Security philosophy: Assume everything will be leaked. Design accordingly. Then protect it anyway.*
+- ✅ **Material Design 3**: Light and dark theme implementation
+- ✅ **Material UI v7**: Complete component library integration
+- ✅ **Clean Components**: Modular component architecture with single responsibility
+- ✅ **Web Share API**: Native sharing with clipboard fallback
+- ✅ **PWA Install**: Install prompt handling for iOS and Android
+- ✅ **Google Apps Script**: Comment form with spreadsheet integration
+- ✅ **Version Display**: Visible version number for transparency
+- ✅ **Result:** Professional Material Design 3 implementation
 
-### 7. Developer Experience (Making Dev Life Not Terrible)
-Good tools make happy developers. Happy developers make good software. Circle of life.
+### 10. Layout & CSS Architecture
 
-- ✅ **Non-Blocking Checks**: Lint/type-check warnings visible but deployment continues (ship fast, fix warnings next)
-- ✅ **Vite HMR**: Hot module reload <100ms (save file, see changes instantly)
-- ✅ **Comprehensive Scripts**: npm run [dev|test|lint|build|type-check] (one command per action)
-- ✅ **Environment Management**: .env files with clear docs (no guessing which variables go where)
-- ✅ **Result:** **Smooth development workflow** (from git clone to production in <5 minutes)
-
-*Developer testimonial: "I can't believe it actually works this well" — the developer (me) (actually AI) (technically both)*
-
-### 8. E2E Testing with Playwright (Testing Like Users Do)
-Unit tests test code. E2E tests test reality. Reality is what users experience.
-
-- ✅ **Multi-Device Screenshots**: iPhone 14, Galaxy S24 Ultra, iPad 11th Gen, Galaxy Tab S10, Square-1080p (5 viewports)
-- ✅ **Device-Accurate Rendering**: Proper scale factors + viewport sizes (pixel-perfect testing)
-- ✅ **Organized Screenshots**: Device-specific folders (e2e/screenshots/[device]/*.png)
-- ✅ **Separated from Unit Tests**: Playwright config isolated from Vitest (clean separation of concerns)
-- ✅ **Automated Captures**: Home, game, about×5, comments, light mode, dark mode (visual regression baseline)
-- ✅ **Result:** **30 E2E tests** across 5 devices = **150+ screenshots** documenting every screen (comprehensive coverage)
-
-*Testing philosophy: If Playwright can't click it, users can't either. If screenshots look broken, UI is broken.*
-
-### 9. UI/UX & Component Architecture (Making It Pretty)
-Material Design 3 is Google's design system. We didn't reinvent the wheel, we just painted it purple.
-
-- ✅ **MD3 Theming**: Light mode (for morning people) + Dark mode (for developers)
-- ✅ **Material UI v7**: Complete component library (@mui/material does the heavy lifting)
-- ✅ **Clean Components**: AboutSection, AppVersion, BackButton, ThemeToggle, GameBoard, etc. (single responsibility principle)
-- ✅ **Web Share API**: Share button with clipboard fallback (works everywhere, gracefully degrades)
-- ✅ **PWA Install**: beforeinstallprompt handling + install detection (iOS + Android support)
-- ✅ **Gradient Buttons**: Eye-catching action buttons (Share, Install, Download CV — users can't miss them)
-- ✅ **Google Apps Script**: Comment form integration (feedback goes straight to spreadsheet)
-- ✅ **Visible Versioning**: v0.08 displayed on every screen (because transparency)
-- ✅ **Result:** **Clean architecture** following Material Design 3 guidelines (looks professional, behaves predictably)
-
-*Design philosophy: Users don't care about your component architecture. They care if buttons work and things look nice.*
-
-### 10. Layout & CSS Architecture (The Great 100vw Bug of 2025)
-Responsive design is easy until it isn't. Here's what we learned the hard way:
-
-- ✅ **Fixed 100vw Bug**: `100vw` includes scrollbar → horizontal overflow on Windows (replaced with `100%` everywhere)
-- ✅ **No Scroll Ever**: Eliminated horizontal and vertical scroll on all device sizes (viewport-constrained layouts)
-- ✅ **Responsive Grid**: Game board constrained within viewport bounds (no content cutoff)
-- ✅ **Consistent Centering**: Flexbox with alignItems: 'center' across all views (everything centered, always)
-- ✅ **Absolute Positioning**: Top corners for Back button + theme toggle (stays in place during scroll)
-- ✅ **Result:** **Pixel-perfect layout** across phones, tablets, and square viewports (tested on 5 devices, works on all 5)
-
-*CSS lesson learned: 100vw seems innocent until you test on Windows. Then it's pure chaos. Use 100% instead. You're welcome.*
+- ✅ **Viewport Width Fix**: Uses `100%` instead of `100vw` to avoid scrollbar issues
+- ✅ **Scroll Prevention**: Eliminated horizontal and vertical scrolling
+- ✅ **Responsive Grid**: Viewport-constrained game board layout
+- ✅ **Consistent Centering**: Flexbox-based centering across all views
+- ✅ **Absolute Positioning**: Fixed positioning for UI controls
+- ✅ **Result:** Pixel-perfect responsive layout across all devices
 
 ## 🛠️ Tech Stack
 
