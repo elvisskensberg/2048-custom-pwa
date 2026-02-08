@@ -33,7 +33,10 @@
       "WebFetch(domain:thankful-sky-020f0c103.4.azurestaticapps.net)",
       "Bash(git push:*)",
       "Bash(git fetch:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File:*)",
+      "Bash(Get-ChildItem:*)",
+      "Bash(Select-Object:*)"
     ]
   }
 }

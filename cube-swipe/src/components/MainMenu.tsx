@@ -1,4 +1,5 @@
 import { Button, Stack } from '@mui/material'
+import LinkedIn from '@mui/icons-material/LinkedIn'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
 import { AppVersion } from './AppVersion'
 import cvPdf from '../assets/Elvis Skensberg CV.pdf'
@@ -116,6 +117,29 @@ export const MainMenu = ({ onStartGame, onOpenAbout, onOpenComments }: MainMenuP
         }}
       >
         Recruiter? Download my CV
+      </Button>
+
+      <Button
+        variant="contained"
+        fullWidth
+        href="https://www.linkedin.com/in/elvis-skensberg"
+        target="_blank"
+        rel="noopener noreferrer"
+        startIcon={<LinkedIn />}
+        sx={{
+          py: 1.5,
+          fontSize: '1rem',
+          textTransform: 'none',
+          background: 'linear-gradient(135deg, #0077B5 0%, #00A0DC 100%)',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+          '&:hover': {
+            background: 'linear-gradient(135deg, #0077B5 0%, #00A0DC 100%)',
+            transform: 'translateY(-2px)',
+            boxShadow: '0 4px 12px rgba(0, 119, 181, 0.4)',
+          },
+        }}
+      >
+        My LinkedIn
       </Button>
 
       <AppVersion />
