@@ -4,7 +4,7 @@
 
 2048 Custom PWA ("Cube Swipe") — a professional 3D swipe-based 2048 game built with React 19, TypeScript 5.9, Vite 7, and Material UI v7. Features PWA update notifications, comprehensive analytics, and a 30-page professional showcase carousel. Deployed on Azure Static Web Apps.
 
-**Current Version:** v0.10
+**Current Version:** v0.11
 
 **Key Features:**
 - PWA with service worker caching and offline support
@@ -23,7 +23,7 @@
 │   │   ├── components/  # React components (PascalCase files)
 │   │   │   ├── AboutSection.tsx     # 30-page carousel showcase
 │   │   │   ├── UpdatePrompt.tsx     # PWA update notifications
-│   │   │   ├── AppVersion.tsx       # Version display (v0.10)
+│   │   │   ├── AppVersion.tsx       # Version display (v0.11)
 │   │   │   ├── GameBoard.tsx        # Main game component
 │   │   │   ├── GameModeSelect.tsx   # Classic/Fibonacci mode selection
 │   │   │   ├── MainMenu.tsx         # Home menu
@@ -262,7 +262,7 @@ feat(analytics): add game event tracking
 
 ### Information & Settings
 - **AboutSection.tsx** - 30-page professional carousel showcase
-- **AppVersion.tsx** - Version display (v0.10, bottom-right)
+- **AppVersion.tsx** - Version display (v0.11, bottom-right)
 - **ThemeToggle.tsx** - Light/dark theme switcher (top-right)
 - **UpdatePrompt.tsx** - PWA update notification system
 
