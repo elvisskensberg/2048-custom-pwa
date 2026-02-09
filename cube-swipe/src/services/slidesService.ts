@@ -11,26 +11,26 @@ export const getAboutSlides = (): SlideCollection => ({
   totalCount: pages.length,
 })
 
-// Template placeholder data
+// Template placeholder content - same text for all 30 variations
 const templateContent: BaseContentItem = {
   title: 'Template Showcase',
   subtitle: 'Design System Preview',
   emoji: '🎨',
   content: [
-    'This is a template demonstrating the design system.',
     'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
+    'Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
     'Each variant showcases different Material Design 3 patterns.',
   ],
 }
 
-// Generate template slides: all 3 design variants with placeholder data
+// Generate template slides: 30 variations with same placeholder text
+// Creates 10 sets × 3 design variants (gradient, card, minimal)
 export const getTemplateSlides = (): SlideCollection => {
-  const variants: DesignVariant[] = ['gradient', 'card', 'minimal']
-  const slides: PageData[] = variants.map((variant, index) => ({
-    ...templateContent,
-    design: variant,
-    colors: colorSchemes[index],
-  }))
+  const slides: PageData[] = Array.from({ length: 10 }, (_, index) => [
+    { ...templateContent, design: 'gradient' as DesignVariant, colors: colorSchemes[index * 3] },
+    { ...templateContent, design: 'card' as DesignVariant, colors: colorSchemes[index * 3 + 1] },
+    { ...templateContent, design: 'minimal' as DesignVariant, colors: colorSchemes[index * 3 + 2] },
+  ]).flat()
 
   return {
     slides,
