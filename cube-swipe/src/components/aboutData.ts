@@ -24,14 +24,10 @@ export interface BaseContentItem {
 
 export const baseContent: BaseContentItem[] = [
   {
-    title: 'Production Build',
-    subtitle: 'Optimized Performance',
-    emoji: '⚡',
-    content: [
-      '195 KB total bundle, 57 KB gzipped main bundle.',
-      'Vite configuration with PWA offline support, code splitting, and Terser minification.',
-      'Optimized asset caching strategies for fast load times.',
-    ],
+    title: '100% AI Vibe Coding',
+    subtitle: 'My journey to building enterprise level Front End App with just AI',
+    emoji: '🤖',
+    content: [],
   },
   {
     title: 'Azure Cloud',

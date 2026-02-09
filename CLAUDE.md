@@ -154,6 +154,12 @@ npm run test:e2e
 - [ ] Text readable in both themes
 - [ ] Buttons properly sized and spaced
 
+**IMPORTANT: If About/Templates content or UI changed:**
+- [ ] Regenerate screenshots (see "E2E Screenshot & PDF Regeneration" section)
+- [ ] Regenerate PDF from story-mode screenshots
+- [ ] Verify PDF includes updated content
+- [ ] Review page01 screenshot shows new content
+
 ### 7. Update Documentation ✅
 
 **Update README.md if:**
@@ -360,6 +366,58 @@ npm test                 # Unit tests
 npm run test:coverage    # With coverage report
 npm run test:e2e         # E2E across all devices
 npm run test:e2e:ui      # E2E with Playwright UI
+```
+
+### E2E Screenshot & PDF Regeneration
+
+**CRITICAL: When to regenerate screenshots and PDFs:**
+
+When ANY of these files change, you MUST regenerate screenshots and PDFs:
+1. `cube-swipe/e2e/app.spec.ts` - Test file modified
+2. `cube-swipe/src/components/AboutSection.tsx` - About page UI changed
+3. `cube-swipe/src/components/aboutData.ts` - About page content changed
+4. `cube-swipe/src/components/TemplatesSection.tsx` - Templates UI changed
+5. `cube-swipe/src/services/slidesService.ts` - Slide content/generation changed
+6. Any component affecting About or Templates sections
+
+**Regeneration workflow:**
+
+```bash
+cd cube-swipe
+
+# 1. Clean old screenshots
+rm e2e/screenshots/story-mode/page*.png
+
+# 2. Regenerate About section screenshots (Square-1080p for 1:1 ratio)
+npx playwright test --project=Square-1080p --grep="should navigate to About screen"
+
+# 3. Verify correct screenshots generated
+ls e2e/screenshots/story-mode
+
+# 4. Regenerate PDF from screenshots
+cd e2e/screenshots/story-mode
+node generate-pdf.cjs
+cd ../../..
+
+# 5. Verify PDF generated
+ls -lh e2e/screenshots/story-mode/elvis-ai-showcase.pdf
+```
+
+**What gets regenerated:**
+- ✅ 10 About section screenshots (page01-page10) in story-mode folder
+- ✅ 10 About section screenshots in Square-1080p device folder
+- ✅ elvis-ai-showcase.pdf (generated from story-mode screenshots)
+
+**Quality checks after regeneration:**
+- Verify screenshot count matches expected pages (currently 10)
+- Check PDF file size is reasonable (~10-15 MB)
+- Review first screenshot shows updated content
+- Ensure no duplicate page numbers in filenames
+
+**For Templates section updates:**
+```bash
+# Regenerate all 50 template screenshots
+npx playwright test --project=Square-1080p --grep="should navigate to Templates screen"
 ```
 
 ## Tech Stack

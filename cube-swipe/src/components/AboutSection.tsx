@@ -15,18 +15,18 @@ const GradientFirstPageContent = (): React.JSX.Element => (
   <>
     <Typography
       sx={{
-        fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem' },
-        fontWeight: 800,
-        color: 'rgba(255,255,255,0.95)',
+        fontSize: { xs: '2rem', sm: '2.5rem', md: '3rem' },
+        fontWeight: 900,
+        color: 'rgba(255,255,255,0.98)',
         textAlign: 'center',
-        textShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        textShadow: '0 3px 12px rgba(0,0,0,0.3)',
         fontFamily: 'Roboto, sans-serif',
-        letterSpacing: '-0.01em',
+        letterSpacing: '-0.02em',
         mb: { xs: 1, sm: 1.5, md: 2 },
-        lineHeight: 1.3,
+        lineHeight: 1.2,
       }}
     >
-      Elvis Skensberg<br />AI Showcase
+      Zero Coding!
     </Typography>
     <GamePreview />
   </>
@@ -39,18 +39,18 @@ const CardFirstPageContent = ({ primaryColor }: { primaryColor: string }): React
       top: { xs: 16, sm: 24, md: 30 },
       left: '50%',
       transform: 'translateX(-50%)',
-      fontSize: { xs: '1.4rem', sm: '1.8rem', md: '2.2rem' },
-      fontWeight: 700,
+      fontSize: { xs: '1.8rem', sm: '2.2rem', md: '2.6rem' },
+      fontWeight: 800,
       color: primaryColor,
       textAlign: 'center',
       fontFamily: 'Roboto, sans-serif',
-      letterSpacing: '-0.01em',
-      lineHeight: 1.3,
+      letterSpacing: '-0.02em',
+      lineHeight: 1.2,
       zIndex: 10,
       width: { xs: '90%', sm: 'auto' },
     }}
   >
-    Elvis Skensberg<br />AI Showcase
+    Zero Coding!
   </Typography>
 )
 
@@ -61,18 +61,18 @@ const MinimalFirstPageContent = ({ primaryColor }: { primaryColor: string }): Re
       top: { xs: 20, sm: 30, md: 40 },
       left: '50%',
       transform: 'translateX(-50%)',
-      fontSize: { xs: '1.3rem', sm: '1.7rem', md: '2rem' },
-      fontWeight: 700,
+      fontSize: { xs: '1.6rem', sm: '2rem', md: '2.4rem' },
+      fontWeight: 800,
       color: primaryColor,
       textAlign: 'center',
       fontFamily: 'monospace',
-      letterSpacing: '0.02em',
-      lineHeight: 1.4,
+      letterSpacing: '0.03em',
+      lineHeight: 1.2,
       zIndex: 10,
       width: { xs: '90%', sm: 'auto' },
     }}
   >
-    ELVIS SKENSBERG<br />AI SHOWCASE
+    ZERO CODING!
   </Typography>
 )
 

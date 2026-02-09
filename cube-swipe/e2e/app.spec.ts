@@ -50,11 +50,11 @@ test.describe('Elvis Skensberg AI Showcase', () => {
     test.setTimeout(90000) // 90 seconds for 10 pages
     await page.goto('/')
     await page.getByRole('button', { name: 'About' }).click()
-    await expect(page.getByText('Production Build')).toBeVisible()
+    await expect(page.getByText('100% AI Vibe Coding')).toBeVisible()
 
     // Capture all 10 pages of the About section (10 selected variants)
     const baseTitles = [
-      'Production Build',
+      '100% AI Vibe Coding',
       'Azure Cloud',
       'CI/CD Pipeline',
       'Testing',
