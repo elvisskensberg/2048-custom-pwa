@@ -54,8 +54,8 @@ const CardSlide = ({ page, firstPageContent }: CardSlideProps): React.JSX.Elemen
         borderRadius: { xs: '20px', sm: '28px', md: '32px' },
         boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
         padding: { xs: '30px 20px', sm: '40px 35px', md: '60px 50px' },
-        maxWidth: { xs: '100%', sm: 600, md: 750 },
-        width: { xs: '90%', sm: '85%', md: '85%' },
+        maxWidth: '80%',
+        width: '80%',
         borderLeft: `8px solid ${page.colors.accent}`,
         position: 'relative',
       }}

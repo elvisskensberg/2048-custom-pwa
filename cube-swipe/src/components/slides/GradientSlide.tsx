@@ -31,6 +31,7 @@ const GradientSlide = ({ page, firstPageContent }: GradientSlideProps): React.JS
         borderRadius: '50%',
         background: 'rgba(255,255,255,0.1)',
         backdropFilter: 'blur(10px)',
+        zIndex: 0,
       }}
     />
     <Box
@@ -43,13 +44,14 @@ const GradientSlide = ({ page, firstPageContent }: GradientSlideProps): React.JS
         borderRadius: '50%',
         background: 'rgba(255,255,255,0.08)',
         backdropFilter: 'blur(10px)',
+        zIndex: 0,
       }}
     />
 
-    {firstPageContent}
+    <Box sx={{ zIndex: 1, position: 'relative' }}>{firstPageContent}</Box>
 
     {/* Emoji */}
-    <Typography sx={{ fontSize: { xs: '3rem', sm: '4.5rem', md: '6rem' }, mb: { xs: 1, sm: 1.5, md: 2 } }}>
+    <Typography sx={{ fontSize: { xs: '3rem', sm: '4.5rem', md: '6rem' }, mb: { xs: 1, sm: 1.5, md: 2 }, zIndex: 1, position: 'relative' }}>
       {page.emoji}
     </Typography>
 
@@ -60,10 +62,14 @@ const GradientSlide = ({ page, firstPageContent }: GradientSlideProps): React.JS
         fontWeight: 900,
         color: '#FFFFFF',
         textAlign: 'center',
-        textShadow: '0 4px 12px rgba(0,0,0,0.3)',
+        textShadow: '0 2px 4px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.5), 0 8px 24px rgba(0,0,0,0.3)',
         fontFamily: 'Roboto, sans-serif',
         letterSpacing: '-0.02em',
         mb: { xs: 0.5, sm: 0.75, md: 1 },
+        zIndex: 1,
+        position: 'relative',
+        maxWidth: '80%',
+        px: 2,
       }}
     >
       {page.title}
@@ -77,7 +83,12 @@ const GradientSlide = ({ page, firstPageContent }: GradientSlideProps): React.JS
         color: 'rgba(255,255,255,0.9)',
         textAlign: 'center',
         fontStyle: 'italic',
+        textShadow: '0 2px 6px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.3)',
         mb: { xs: 2, sm: 3, md: 4 },
+        zIndex: 1,
+        position: 'relative',
+        maxWidth: '80%',
+        px: 2,
       }}
     >
       {page.subtitle}
@@ -86,7 +97,7 @@ const GradientSlide = ({ page, firstPageContent }: GradientSlideProps): React.JS
     {/* Content */}
     <Stack
       spacing={{ xs: 1.5, sm: 2, md: 2.5 }}
-      sx={{ maxWidth: { xs: '100%', sm: 600, md: 750 }, px: { xs: 2, sm: 3, md: 4 }, zIndex: 1 }}
+      sx={{ maxWidth: '80%', px: { xs: 2, sm: 3, md: 4 }, zIndex: 1 }}
     >
       {page.content.map((text, index) => (
         <Typography
@@ -97,7 +108,7 @@ const GradientSlide = ({ page, firstPageContent }: GradientSlideProps): React.JS
             color: '#FFFFFF',
             textAlign: 'center',
             lineHeight: { xs: 1.6, md: 1.8 },
-            textShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            textShadow: '0 2px 4px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.3)',
           }}
         >
           {text}

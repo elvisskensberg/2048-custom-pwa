@@ -49,7 +49,7 @@ const MinimalSlide = ({ page, firstPageContent }: MinimalSlideProps): React.JSX.
     />
 
     {/* Content area */}
-    <Box sx={{ maxWidth: { xs: '100%', sm: 650, md: 800 }, px: { xs: 2, sm: 3, md: 5 }, zIndex: 1 }}>
+    <Box sx={{ maxWidth: '80%', px: { xs: 2, sm: 3, md: 4 }, zIndex: 1 }}>
       {/* Emoji with geometric frame */}
       <Box
         sx={{

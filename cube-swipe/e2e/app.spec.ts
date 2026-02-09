@@ -47,15 +47,18 @@ test.describe('Elvis Skensberg AI Showcase', () => {
   })
 
   test('should navigate to About screen', async ({ page }, testInfo) => {
-    test.setTimeout(90000) // 90 seconds for 10 pages
+    test.setTimeout(200000) // 200 seconds for 20 pages
     await page.goto('/')
     await page.getByRole('button', { name: 'About' }).click()
-    await expect(page.getByText('100% AI Vibe Coding')).toBeVisible()
+    await expect(page.getByText('100% AI Prompt Development')).toBeVisible()
 
-    // Capture all 10 pages of the About section (10 selected variants)
+    // Capture all 20 pages of the About section (20 selected variants)
     const baseTitles = [
-      '100% AI Vibe Coding',
-      'Azure Cloud',
+      '100% AI Prompt Development',
+      'The very basics you will need -',
+      'Framework Choice',
+      'Now we need a skeleton 🦴',
+      'Deployment to Cloud',
       'CI/CD Pipeline',
       'Testing',
       'Analytics',
@@ -64,10 +67,17 @@ test.describe('Elvis Skensberg AI Showcase', () => {
       'E2E Testing',
       'UI/UX',
       'Layout & CSS',
+      'Did you know?',
+      'About me',
+      'Also about me...',
+      'continued...',
+      'last one I promise 🙏',
+      'try out my app and tell me what you think',
+      'Elvis Skensberg',
     ]
 
-    // Variants: mostly gradient, with card for topics 3-4 (Testing, Analytics)
-    const variants = ['gradient', 'gradient', 'gradient', 'card', 'card', 'gradient', 'gradient', 'gradient', 'gradient', 'gradient']
+    // Variants: gradient (0-2, 4-5, 8-12), card (3, 6-7), funky (13-19)
+    const variants = ['gradient', 'gradient', 'gradient', 'card', 'gradient', 'gradient', 'card', 'card', 'gradient', 'gradient', 'gradient', 'gradient', 'gradient', 'funky', 'funky', 'funky', 'funky', 'funky', 'funky', 'funky']
     const allPages = baseTitles.map((title, index) => ({
       title,
       variant: variants[index],

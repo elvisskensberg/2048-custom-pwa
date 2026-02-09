@@ -1,4 +1,6 @@
-export type DesignVariant = 'gradient' | 'card' | 'minimal'
+import linkedInPhoto from '../assets/linked-in-photo.jpg'
+
+export type DesignVariant = 'gradient' | 'card' | 'minimal' | 'funky'
 
 export interface ColorScheme {
   primary: string
@@ -13,6 +15,7 @@ export interface PageData {
   content: string[]
   design: DesignVariant
   colors: ColorScheme
+  image?: string
 }
 
 export interface BaseContentItem {
@@ -20,43 +23,75 @@ export interface BaseContentItem {
   subtitle: string
   emoji: string
   content: string[]
+  image?: string
 }
 
 export const baseContent: BaseContentItem[] = [
   {
-    title: '100% AI Vibe Coding',
+    title: '100% AI Prompt Development',
     subtitle: 'My journey to building enterprise level Front End App with just AI',
     emoji: '🤖',
     content: [],
   },
   {
-    title: 'Azure Cloud',
-    subtitle: 'Cloud Infrastructure',
+    title: 'The very basics you will need -',
+    subtitle: 'Ask AI to help you install Visual Studio Code with Claude Plugin. Claude plugin will command the ship for you',
+    emoji: '💻',
+    content: [
+      'Install VS Code - the powerful, extensible code editor from Microsoft.',
+      'Add the Claude AI plugin (by Anthropic) to integrate AI assistance directly in your editor.',
+      'Let Claude command the ship and guide your development journey with intelligent code suggestions.',
+    ],
+  },
+  {
+    title: 'Framework Choice',
+    subtitle: 'AI-guided framework selection',
+    emoji: '⚡',
+    content: [
+      "When creating an app, first ask AI to find the fastest most modern framework options. I've selected the following:",
+      'React 19 provides a mature ecosystem with excellent TypeScript support and robust component architecture.',
+      'Vite 7 offers lightning-fast HMR (<100ms) and optimized production builds with modern ES module support.',
+      'PWA capabilities enable offline functionality, app-like experience, and seamless updates through service workers.',
+    ],
+  },
+  {
+    title: 'Now we need a skeleton 🦴',
+    subtitle: 'Prompt AI to install all necesary tools for you and set up a skeleton project using recommended framework',
+    emoji: '🛠️',
+    content: [
+      'Ask AI to initialize your development environment with all required dependencies.',
+      'Have AI scaffold the project structure following best practices and modern conventions.',
+      'Let AI configure build tools, linters, and testing frameworks automatically.',
+    ],
+  },
+  {
+    title: 'Deployment to Cloud',
+    subtitle: 'Ask AI to guide you to opening account with Microsoft Azure, or Amazon AWS or some alternative, and when you have an account, ask AI to use CLI command line tools to generate resources on a cloud and deploy your skeleton website to the cloud (as a proof of concept)',
     emoji: '☁️',
     content: [
-      'Deployed on Azure Static Web Apps with Application Insights monitoring.',
-      'West Europe region for optimal performance.',
-      'Live at: thankful-sky-020f0c103.4.azurestaticapps.net',
+      'Have AI walk you through creating an account with a cloud provider (Azure, AWS, Google Cloud, etc.).',
+      'Ask AI to install and configure CLI tools for your chosen cloud platform.',
+      'Let AI generate cloud resources and deploy your skeleton website as a proof of concept.',
     ],
   },
   {
     title: 'CI/CD Pipeline',
-    subtitle: 'Automated Deployment',
+    subtitle: 'Ask AI to help you set up a repository for your project and configure CI/CD pipeline with automated quality checks, build, and deployment',
     emoji: '🤖',
     content: [
-      'Automated quality checks, build, and deployment on every push.',
-      'PR previews with automatic status comments.',
-      'Continuous integration ensures code quality and reliability.',
+      'Have AI create a Git repository and set up version control for your project.',
+      'Ask AI to configure CI/CD workflows that run automated quality checks, build, and deployment on every push.',
+      'Let AI set up PR previews with automatic status comments and continuous integration for code quality.',
     ],
   },
   {
     title: 'Testing',
-    subtitle: 'Quality Assurance',
+    subtitle: 'Now ask AI to:',
     emoji: '✅',
     content: [
-      'Comprehensive testing with Vitest and React Testing Library.',
-      'Fast unit test execution with modern testing infrastructure.',
-      'Continuous integration with automated test runs.',
+      'Set up comprehensive testing with Vitest and React Testing Library for your project.',
+      'Configure fast unit test execution with modern testing infrastructure and watch mode.',
+      'Integrate automated test runs into your CI/CD pipeline to ensure quality on every commit.',
     ],
   },
   {
@@ -101,12 +136,12 @@ export const baseContent: BaseContentItem[] = [
   },
   {
     title: 'UI/UX',
-    subtitle: 'Material Design 3',
+    subtitle: 'Beautiful, Intuitive Design',
     emoji: '🎨',
     content: [
-      'Implements Material Design 3 guidelines with light and dark themes.',
-      'Clean component architecture with Web Share API integration.',
-      'PWA install prompts and progressive enhancement features.',
+      'Material Design 3 with dynamic color theming - smooth light/dark mode transitions with elegant animations.',
+      'Touch-optimized swipe gestures, responsive layouts, and delightful micro-interactions throughout the experience.',
+      'Progressive Web App with native-like feel - install prompts, offline support, and seamless updates.',
     ],
   },
   {
@@ -118,6 +153,54 @@ export const baseContent: BaseContentItem[] = [
       'Fixed viewport width issues (100% instead of 100vw).',
       'Flexbox-based centering with absolute positioning for UI controls.',
     ],
+  },
+  {
+    title: 'Did you know?',
+    subtitle: 'This entire slide was made using the same project, stay tuned for next episode 😉',
+    emoji: '🎭',
+    content: [],
+  },
+  {
+    title: 'About me',
+    subtitle: 'AI-Driven Delivery Specialist & Senior .NET Engineer (9+ Years): Accelerating the SDLC by integrating Claude.ai, GitHub Copilot, and Gemini to bridge the gap between complex business logic and high-availability production code',
+    emoji: '👨‍💻',
+    content: [],
+    image: linkedInPhoto,
+  },
+  {
+    title: 'Also about me...',
+    subtitle: 'Architect of Self-Validating Systems: Expert in Multi-Agent Prompt Engineering to orchestrate E2E CI/CD pipelines, ensuring resilient releases and "zero-day" delivery maturity.',
+    emoji: '🏗️',
+    content: [],
+    image: linkedInPhoto,
+  },
+  {
+    title: 'continued...',
+    subtitle: 'Proven Scalability: Built and scaled microservices and payment platforms (Google Pay partner) with a focus on high-performance architecture and reliability.',
+    emoji: '🚀',
+    content: [],
+    image: linkedInPhoto,
+  },
+  {
+    title: 'last one I promise 🙏',
+    subtitle: 'Strategic Technical Leader: Aligning stakeholders and engineering teams through AI-enhanced Agile workflows to unblock delivery and maximize ROI across global markets.',
+    emoji: '🎯',
+    content: [],
+    image: linkedInPhoto,
+  },
+  {
+    title: 'try out my app and tell me what you think',
+    subtitle: 'warning, 2048 game is very addictive',
+    emoji: '🎮',
+    content: [],
+    image: linkedInPhoto,
+  },
+  {
+    title: 'Elvis Skensberg',
+    subtitle: 'github.com/elvisskensberg',
+    emoji: '💼',
+    content: [],
+    image: linkedInPhoto,
   },
 ]
 
@@ -181,15 +264,19 @@ export const colorSchemes: ColorScheme[] = [
   { primary: '#059669', secondary: '#D1FAE5', accent: '#10B981' },
 ]
 
-// Create 10 pages: selected variants for each topic
-// Topics 0-2, 5-9: gradient variant (index * 3)
-// Topics 3-4: card variant (index * 3 + 1)
+// Create 20 pages: selected variants for each topic
+// Topics 0-2, 4-5, 8-12: gradient variant (index * 3)
+// Topics 3, 6-7: card variant (index * 3 + 1)
+// Topics 13-19: funky variant (index * 3 + 2)
 export const pages: PageData[] = baseContent.map((item, index) => {
-  const isCardVariant = index === 3 || index === 4
+  const isCardVariant = index === 3 || index === 6 || index === 7
+  const isFunkyVariant = index >= 13 && index <= 19
+  const design = isFunkyVariant ? 'funky' : (isCardVariant ? 'card' : 'gradient')
+  const colorIndex = (index * 3 + (isFunkyVariant ? 2 : isCardVariant ? 1 : 0)) % colorSchemes.length
   return {
     ...item,
-    design: (isCardVariant ? 'card' : 'gradient') as DesignVariant,
-    colors: colorSchemes[index * 3 + (isCardVariant ? 1 : 0)],
+    design: design as DesignVariant,
+    colors: colorSchemes[colorIndex],
   }
 })
 

@@ -2,6 +2,7 @@ import type { PageData } from '../aboutData'
 import GradientSlide from './GradientSlide'
 import CardSlide from './CardSlide'
 import MinimalSlide from './MinimalSlide'
+import FunkySlide from './FunkySlide'
 
 export interface SlideRendererProps {
   page: PageData
@@ -16,6 +17,8 @@ const SlideRenderer = ({ page, firstPageContent }: SlideRendererProps): React.JS
       return <CardSlide page={page} firstPageContent={firstPageContent} />
     case 'minimal':
       return <MinimalSlide page={page} firstPageContent={firstPageContent} />
+    case 'funky':
+      return <FunkySlide page={page} firstPageContent={firstPageContent} />
   }
 }
 
