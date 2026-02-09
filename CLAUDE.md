@@ -2,14 +2,14 @@
 
 ## Project Overview
 
-2048 Custom PWA ("Cube Swipe") — a professional 3D swipe-based 2048 game built with React 19, TypeScript 5.9, Vite 7, and Material UI v7. Features PWA update notifications, comprehensive analytics, and a 30-page professional showcase carousel. Deployed on Azure Static Web Apps.
+2048 Custom PWA ("Cube Swipe") — a professional 3D swipe-based 2048 game built with React 19, TypeScript 5.9, Vite 7, and Material UI v7. Features PWA update notifications, comprehensive analytics, and a 10-page professional showcase carousel. Deployed on Azure Static Web Apps.
 
 **Current Version:** v0.12
 
 **Key Features:**
 - PWA with service worker caching and offline support
 - User-prompted update notifications
-- 30-page professional About section carousel
+- 10-page professional About section carousel
 - Material Design 3 theming (light/dark)
 - Comprehensive E2E testing across 5 device profiles
 - Real-time analytics with Azure Application Insights
@@ -21,7 +21,7 @@
 ├── cube-swipe/          # Main application (all npm commands run from here)
 │   ├── src/
 │   │   ├── components/  # React components (PascalCase files)
-│   │   │   ├── AboutSection.tsx     # 30-page carousel showcase
+│   │   │   ├── AboutSection.tsx     # 10-page carousel showcase
 │   │   │   ├── UpdatePrompt.tsx     # PWA update notifications
 │   │   │   ├── AppVersion.tsx       # Version display (v0.12)
 │   │   │   ├── GameBoard.tsx        # Main game component
@@ -84,7 +84,7 @@ npm run preview          # Preview production build
 
 **E2E Screenshots:**
 - Located in `e2e/screenshots/[device]/` for each device profile
-- Story-mode screenshots: `e2e/screenshots/story-mode/page01-page30.png`
+- Story-mode screenshots: `e2e/screenshots/story-mode/page01-page10.png`
 - PDF generation: `node e2e/screenshots/story-mode/generate-pdf.cjs`
 
 ## Pre-Commit Checklist
@@ -205,8 +205,8 @@ feat(analytics): add game event tracking
 - Views: `'menu' | 'modeSelect' | 'game' | 'about' | 'comments'`
 - UpdatePrompt component mounted at root level for app-wide update notifications
 
-### AboutSection - 30-Page Carousel
-- 10 topics × 3 design variants = 30 unique pages
+### AboutSection - 10-Page Carousel
+- 10 topics × 1 selected design variant each = 10 unique pages (primarily gradient, with card variant for topics 4-5)
 - **Design variants**: `gradient` (bold dramatic), `card` (professional floating), `minimal` (clean geometric)
 - **Material Design 3**: 30 unique color palettes (10 per variant)
 - **First page**: Shows "Elvis Skensberg AI Showcase" title + 2048 game preview
@@ -261,7 +261,7 @@ feat(analytics): add game event tracking
 - **GameModeSelect.tsx** - Classic vs Fibonacci mode selection
 
 ### Information & Settings
-- **AboutSection.tsx** - 30-page professional carousel showcase
+- **AboutSection.tsx** - 10-page professional carousel showcase
 - **AppVersion.tsx** - Version display (v0.12, bottom-right)
 - **ThemeToggle.tsx** - Light/dark theme switcher (top-right)
 - **UpdatePrompt.tsx** - PWA update notification system
@@ -447,7 +447,7 @@ npm run test:e2e:ui      # E2E with Playwright UI
 ### Material Design 3
 - Follow MD3 visual language and patterns
 - Use theme tokens consistently
-- Maintain design system coherence across 30 About pages
+- Maintain design system coherence across 10 About pages
 
 ### Content Standards
 - AboutSection: Professional feature showcase

@@ -163,21 +163,22 @@ export const colorSchemes: ColorScheme[] = [
   { primary: '#3949AB', secondary: '#7986CB', accent: '#5C6BC0' },
 ]
 
-// Create 30 pages: 3 variations x 10 topics
-export const pages: PageData[] = baseContent.flatMap((item, index) => [
-  {
+// Create 10 pages: selected variants for each topic
+// Topics 0-2, 5-9: gradient variant (index * 3)
+// Topics 3-4: card variant (index * 3 + 1)
+export const pages: PageData[] = baseContent.map((item, index) => {
+  const isCardVariant = index === 3 || index === 4
+  return {
     ...item,
-    design: 'gradient' as DesignVariant,
-    colors: colorSchemes[index * 3],
-  },
-  {
-    ...item,
-    design: 'card' as DesignVariant,
-    colors: colorSchemes[index * 3 + 1],
-  },
-  {
-    ...item,
-    design: 'minimal' as DesignVariant,
-    colors: colorSchemes[index * 3 + 2],
-  },
-])
+    design: (isCardVariant ? 'card' : 'gradient') as DesignVariant,
+    colors: colorSchemes[index * 3 + (isCardVariant ? 1 : 0)],
+  }
+})
+
+// Template for generating multiple variants per topic (currently unused)
+// To restore 3 variants per topic, replace pages definition with:
+// export const pages: PageData[] = baseContent.flatMap((item, index) => [
+//   { ...item, design: 'gradient' as DesignVariant, colors: colorSchemes[index * 3] },
+//   { ...item, design: 'card' as DesignVariant, colors: colorSchemes[index * 3 + 1] },
+//   { ...item, design: 'minimal' as DesignVariant, colors: colorSchemes[index * 3 + 2] },
+// ])
