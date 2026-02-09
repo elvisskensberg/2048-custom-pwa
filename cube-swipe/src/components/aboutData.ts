@@ -161,6 +161,28 @@ export const colorSchemes: ColorScheme[] = [
   { primary: '#8E24AA', secondary: '#CE93D8', accent: '#AB47BC' },
   { primary: '#00ACC1', secondary: '#4DD0E1', accent: '#26C6DA' },
   { primary: '#3949AB', secondary: '#7986CB', accent: '#5C6BC0' },
+
+  // Extended variations - vibrant and artistic (20 more for 50 total)
+  { primary: '#FF6B9D', secondary: '#FFE5EC', accent: '#FF8FAB' },
+  { primary: '#00D9FF', secondary: '#CCF5FF', accent: '#33E0FF' },
+  { primary: '#A855F7', secondary: '#F3E8FF', accent: '#C084FC' },
+  { primary: '#22D3EE', secondary: '#CFFAFE', accent: '#67E8F9' },
+  { primary: '#F59E0B', secondary: '#FEF3C7', accent: '#FBBF24' },
+  { primary: '#EC4899', secondary: '#FCE7F3', accent: '#F472B6' },
+  { primary: '#8B5CF6', secondary: '#EDE9FE', accent: '#A78BFA' },
+  { primary: '#10B981', secondary: '#D1FAE5', accent: '#34D399' },
+  { primary: '#F97316', secondary: '#FFEDD5', accent: '#FB923C' },
+  { primary: '#06B6D4', secondary: '#CFFAFE', accent: '#22D3EE' },
+  { primary: '#D946EF', secondary: '#FAE8FF', accent: '#E879F9' },
+  { primary: '#14B8A6', secondary: '#CCFBF1', accent: '#2DD4BF' },
+  { primary: '#F43F5E', secondary: '#FFE4E6', accent: '#FB7185' },
+  { primary: '#6366F1', secondary: '#E0E7FF', accent: '#818CF8' },
+  { primary: '#84CC16', secondary: '#ECFCCB', accent: '#A3E635' },
+  { primary: '#EAB308', secondary: '#FEF9C3', accent: '#FACC15' },
+  { primary: '#0EA5E9', secondary: '#E0F2FE', accent: '#38BDF8' },
+  { primary: '#DB2777', secondary: '#FCE7F3', accent: '#F472B6' },
+  { primary: '#7C3AED', secondary: '#EDE9FE', accent: '#A78BFA' },
+  { primary: '#059669', secondary: '#D1FAE5', accent: '#10B981' },
 ]
 
 // Create 10 pages: selected variants for each topic

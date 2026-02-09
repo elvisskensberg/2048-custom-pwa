@@ -105,38 +105,58 @@ test.describe('Elvis Skensberg AI Showcase', () => {
   })
 
   test('should navigate to Templates screen', async ({ page }, testInfo) => {
-    test.setTimeout(180000) // 3 minutes for 30 pages
+    test.setTimeout(300000) // 5 minutes for 50 pages
     await page.goto('/')
     await page.getByRole('button', { name: 'Templates' }).click()
-    await expect(page.getByText('Template Showcase')).toBeVisible()
 
-    // Capture all 30 template pages (10 sets × 3 design variants)
-    // All pages have same placeholder text, only design/colors differ
+    // Wait for first template to load (could be any of the 17 themes)
+    await page.waitForTimeout(500)
+
+    // Capture all 50 artistic template pages
+    // 17 unique content themes × varied design variants and color schemes
+    const templateTitles = [
+      'Data Visualization',
+      'Creative Portfolio',
+      'Abstract Geometry',
+      'Motion Graphics',
+      '3D Illustrations',
+      'Brutalist Minimal',
+      'Retro Futurism',
+      'Organic Fluidity',
+      'Isometric Grid',
+      'Neon Cyberpunk',
+      'Watercolor Digital',
+      'Gradient Mesh',
+      'Line Art Wireframe',
+      'Glitch Distortion',
+      'Nature Patterns',
+      'Psychedelic Color',
+      'Bauhaus Modernism',
+    ]
+
     const variants = ['gradient', 'card', 'minimal']
-    const allPages = Array.from({ length: 10 }, (_, setIndex) =>
-      variants.map((variant, variantIndex) => ({
-        variant,
-        index: setIndex * 3 + variantIndex + 1,
-        set: setIndex + 1,
-      })),
-    ).flat()
 
-    for (let i = 0; i < allPages.length; i++) {
-      const pageData = allPages[i]
-      await expect(page.getByText('Template Showcase', { exact: true }).first()).toBeVisible()
+    for (let i = 0; i < 50; i++) {
+      const contentIndex = i % templateTitles.length
+      const variantIndex = i % variants.length
+      const expectedTitle = templateTitles[contentIndex]
+
+      // Verify current page title
+      await expect(page.getByText(expectedTitle, { exact: true }).first()).toBeVisible({ timeout: 2000 })
 
       // Save to Templates folder (1:1 ratio) - only for Square-1080p
       if (testInfo.project.name === 'Square-1080p') {
         const pageNum = String(i + 1).padStart(2, '0')
+        const slug = expectedTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')
         await page.screenshot({
-          path: `e2e/screenshots/Templates/template-${pageNum}-set${pageData.set}-${pageData.variant}.png`,
+          path: `e2e/screenshots/Templates/template-${pageNum}-${slug}-${variants[variantIndex]}.png`,
           fullPage: true,
           scale: 'device',
         })
       }
 
       // Navigate to next page (skip on last page)
-      if (i < allPages.length - 1) {
+      if (i < 49) {
         await page.getByLabel('Next page').click()
         await page.waitForTimeout(300) // Wait for navigation animation
       }
