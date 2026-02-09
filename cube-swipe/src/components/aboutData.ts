@@ -1,19 +1,28 @@
 export type DesignVariant = 'gradient' | 'card' | 'minimal'
 
+export interface ColorScheme {
+  primary: string
+  secondary: string
+  accent: string
+}
+
 export interface PageData {
   title: string
   subtitle: string
   emoji: string
   content: string[]
   design: DesignVariant
-  colors: {
-    primary: string
-    secondary: string
-    accent: string
-  }
+  colors: ColorScheme
 }
 
-const baseContent = [
+export interface BaseContentItem {
+  title: string
+  subtitle: string
+  emoji: string
+  content: string[]
+}
+
+export const baseContent: BaseContentItem[] = [
   {
     title: 'Production Build',
     subtitle: 'Optimized Performance',
@@ -116,7 +125,7 @@ const baseContent = [
   },
 ]
 
-const colorSchemes = [
+export const colorSchemes: ColorScheme[] = [
   // Gradient variations - bold and vibrant
   { primary: '#6750A4', secondary: '#E8DEF8', accent: '#EADDFF' },
   { primary: '#D32F2F', secondary: '#FFCDD2', accent: '#EF5350' },
