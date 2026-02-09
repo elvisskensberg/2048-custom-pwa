@@ -8,9 +8,10 @@ interface MainMenuProps {
   onStartGame: () => void
   onOpenAbout: () => void
   onOpenComments: () => void
+  onOpenTemplates: () => void
 }
 
-export const MainMenu = ({ onStartGame, onOpenAbout, onOpenComments }: MainMenuProps) => {
+export const MainMenu = ({ onStartGame, onOpenAbout, onOpenComments, onOpenTemplates }: MainMenuProps) => {
   const { isAppInstalled, handleInstall, handleShare } = useInstallPrompt()
 
   const handleDownloadCV = () => {
@@ -45,6 +46,18 @@ export const MainMenu = ({ onStartGame, onOpenAbout, onOpenComments }: MainMenuP
         }}
       >
         About
+      </Button>
+      <Button
+        variant="outlined"
+        fullWidth
+        onClick={onOpenTemplates}
+        sx={{
+          py: 1.2,
+          fontSize: '0.95rem',
+          textTransform: 'none',
+        }}
+      >
+        Templates
       </Button>
       <Button
         variant="outlined"

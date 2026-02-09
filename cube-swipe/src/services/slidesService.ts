@@ -1,5 +1,5 @@
 import type { PageData, DesignVariant, BaseContentItem, ColorScheme } from '../components/aboutData'
-import { pages } from '../components/aboutData'
+import { pages, colorSchemes } from '../components/aboutData'
 
 export interface SlideCollection {
   slides: PageData[]
@@ -10,6 +10,33 @@ export const getAboutSlides = (): SlideCollection => ({
   slides: pages,
   totalCount: pages.length,
 })
+
+// Template placeholder data
+const templateContent: BaseContentItem = {
+  title: 'Template Showcase',
+  subtitle: 'Design System Preview',
+  emoji: '🎨',
+  content: [
+    'This is a template demonstrating the design system.',
+    'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
+    'Each variant showcases different Material Design 3 patterns.',
+  ],
+}
+
+// Generate template slides: all 3 design variants with placeholder data
+export const getTemplateSlides = (): SlideCollection => {
+  const variants: DesignVariant[] = ['gradient', 'card', 'minimal']
+  const slides: PageData[] = variants.map((variant, index) => ({
+    ...templateContent,
+    design: variant,
+    colors: colorSchemes[index],
+  }))
+
+  return {
+    slides,
+    totalCount: slides.length,
+  }
+}
 
 export const createSlideCollection = (
   content: BaseContentItem[],

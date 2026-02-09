@@ -11,12 +11,14 @@ import { GameModeSelect } from './components/GameModeSelect'
 import { GameBoard } from './components/GameBoard'
 import { LeaveCommentForm } from './components/LeaveCommentForm'
 import { AboutSection } from './components/AboutSection'
+import { TemplatesSection } from './components/TemplatesSection'
 import { testGoogleScriptAPI } from './utils/testGoogleScript'
 
 function App() {
   const [gameStarted, setGameStarted] = useState(false)
   const [gameMode, setGameMode] = useState<'classic' | 'fibonacci' | null>(null)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light')
 
@@ -52,9 +54,11 @@ function App() {
       ? 'modeSelect'
       : aboutOpen
         ? 'about'
-        : commentsOpen
-          ? 'comments'
-          : 'menu'
+        : templatesOpen
+          ? 'templates'
+          : commentsOpen
+            ? 'comments'
+            : 'menu'
 
   const handleBack = () => {
     if (gameMode) {
@@ -63,6 +67,8 @@ function App() {
       setGameStarted(false)
     } else if (aboutOpen) {
       setAboutOpen(false)
+    } else if (templatesOpen) {
+      setTemplatesOpen(false)
     } else if (commentsOpen) {
       setCommentsOpen(false)
     }
@@ -80,22 +86,22 @@ function App() {
           alignItems: 'center',
           justifyContent: 'flex-start',
           bgcolor: 'background.default',
-          pt: aboutOpen ? 0 : { xs: 8, sm: 10 },
+          pt: aboutOpen || templatesOpen ? 0 : { xs: 8, sm: 10 },
           overflow: 'hidden',
         }}
       >
-        {!aboutOpen && (gameStarted || commentsOpen) && (
+        {!aboutOpen && !templatesOpen && (gameStarted || commentsOpen) && (
           <BackButton onClick={handleBack} />
         )}
 
-        {!aboutOpen && (
+        {!aboutOpen && !templatesOpen && (
           <ThemeToggle
             themeMode={themeMode}
             onToggle={() => setThemeMode((prev) => (prev === 'light' ? 'dark' : 'light'))}
           />
         )}
 
-        {!aboutOpen && (
+        {!aboutOpen && !templatesOpen && (
           <Typography
             variant="h3"
             component="h1"
@@ -116,11 +122,13 @@ function App() {
           <MainMenu
             onStartGame={() => setGameStarted(true)}
             onOpenAbout={() => setAboutOpen(true)}
+            onOpenTemplates={() => setTemplatesOpen(true)}
             onOpenComments={() => setCommentsOpen(true)}
           />
         )}
         {currentView === 'modeSelect' && <GameModeSelect onSelectMode={setGameMode} />}
         {currentView === 'about' && <AboutSection />}
+        {currentView === 'templates' && <TemplatesSection />}
         {currentView === 'comments' && <LeaveCommentForm onClose={() => setCommentsOpen(false)} />}
         {currentView === 'game' && gameMode && <GameBoard gameMode={gameMode} />}
       </Box>
