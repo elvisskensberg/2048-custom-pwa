@@ -22,8 +22,97 @@ const GradientSlide = ({ page, firstPageContent }: GradientSlideProps): React.JS
       `,
       position: 'relative',
       overflow: 'hidden',
+      '&::before': {
+        content: '""',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: `
+          radial-gradient(circle at 50% 50%, ${page.colors.accent}15 0%, transparent 70%),
+          radial-gradient(circle at 20% 80%, ${page.colors.primary}10 0%, transparent 60%)
+        `,
+        animation: 'particleFloat 30s ease-in-out infinite',
+        pointerEvents: 'none',
+        '@keyframes particleFloat': {
+          '0%, 100%': { transform: 'translate(0, 0) scale(1)' },
+          '33%': { transform: 'translate(30px, -20px) scale(1.1)' },
+          '66%': { transform: 'translate(-20px, 30px) scale(0.9)' },
+        },
+      },
     }}
   >
+    {/* Gooey liquid effect container */}
+    <Box
+      sx={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        filter: 'contrast(20) blur(10px)',
+        zIndex: 0,
+        pointerEvents: 'none',
+      }}
+    >
+      {/* Liquid particle 1 */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '15%',
+          left: '10%',
+          width: { xs: 60, sm: 90, md: 120 },
+          height: { xs: 60, sm: 90, md: 120 },
+          borderRadius: '50%',
+          background: `${page.colors.accent}60`,
+          animation: 'liquidFloat1 12s ease-in-out infinite',
+          '@keyframes liquidFloat1': {
+            '0%, 100%': { transform: 'translate(0, 0) scale(1)' },
+            '25%': { transform: 'translate(50px, -30px) scale(1.3)' },
+            '50%': { transform: 'translate(100px, 20px) scale(0.8)' },
+            '75%': { transform: 'translate(30px, 40px) scale(1.1)' },
+          },
+        }}
+      />
+      {/* Liquid particle 2 */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '20%',
+          left: '15%',
+          width: { xs: 50, sm: 75, md: 100 },
+          height: { xs: 50, sm: 75, md: 100 },
+          borderRadius: '50%',
+          background: `${page.colors.primary}60`,
+          animation: 'liquidFloat2 15s ease-in-out infinite 3s',
+          '@keyframes liquidFloat2': {
+            '0%, 100%': { transform: 'translate(0, 0) scale(1)' },
+            '33%': { transform: 'translate(-40px, 50px) scale(1.2)' },
+            '66%': { transform: 'translate(60px, -20px) scale(0.9)' },
+          },
+        }}
+      />
+      {/* Liquid particle 3 */}
+      <Box
+        sx={{
+          position: 'absolute',
+          bottom: '25%',
+          right: '20%',
+          width: { xs: 70, sm: 100, md: 130 },
+          height: { xs: 70, sm: 100, md: 130 },
+          borderRadius: '50%',
+          background: `${page.colors.accent}60`,
+          animation: 'liquidFloat3 18s ease-in-out infinite 6s',
+          '@keyframes liquidFloat3': {
+            '0%, 100%': { transform: 'translate(0, 0) scale(1)' },
+            '40%': { transform: 'translate(-70px, -40px) scale(1.4)' },
+            '80%': { transform: 'translate(40px, 60px) scale(0.7)' },
+          },
+        }}
+      />
+    </Box>
+
     {/* Animated blob shape 1 */}
     <Box
       sx={{
@@ -36,6 +125,7 @@ const GradientSlide = ({ page, firstPageContent }: GradientSlideProps): React.JS
         borderRadius: '60% 40% 30% 70% / 60% 30% 70% 40%',
         filter: 'blur(40px)',
         animation: 'morph 20s ease-in-out infinite',
+        mixBlendMode: 'overlay',
         zIndex: 0,
         '@keyframes morph': {
           '0%, 100%': { borderRadius: '60% 40% 30% 70% / 60% 30% 70% 40%' },
@@ -44,7 +134,7 @@ const GradientSlide = ({ page, firstPageContent }: GradientSlideProps): React.JS
       }}
     />
 
-    {/* Animated blob shape 2 */}
+    {/* Animated blob shape 2 with 3D effect */}
     <Box
       sx={{
         position: 'absolute',
@@ -55,11 +145,19 @@ const GradientSlide = ({ page, firstPageContent }: GradientSlideProps): React.JS
         background: `radial-gradient(circle, ${page.colors.primary}15, transparent 70%)`,
         borderRadius: '40% 60% 60% 40% / 70% 30% 70% 30%',
         filter: 'blur(50px)',
-        animation: 'morphReverse 15s ease-in-out infinite',
+        animation: 'morphReverse3D 15s ease-in-out infinite',
+        mixBlendMode: 'soft-light',
+        transform: 'perspective(800px) rotateX(10deg)',
         zIndex: 0,
-        '@keyframes morphReverse': {
-          '0%, 100%': { borderRadius: '40% 60% 60% 40% / 70% 30% 70% 30%' },
-          '50%': { borderRadius: '60% 40% 30% 70% / 40% 60% 50% 50%' },
+        '@keyframes morphReverse3D': {
+          '0%, 100%': {
+            borderRadius: '40% 60% 60% 40% / 70% 30% 70% 30%',
+            transform: 'perspective(800px) rotateX(10deg) rotateY(0deg)',
+          },
+          '50%': {
+            borderRadius: '60% 40% 30% 70% / 40% 60% 50% 50%',
+            transform: 'perspective(800px) rotateX(10deg) rotateY(5deg)',
+          },
         },
       }}
     />
@@ -85,7 +183,7 @@ const GradientSlide = ({ page, firstPageContent }: GradientSlideProps): React.JS
       }}
     />
 
-    {/* Geometric polygon - hexagon */}
+    {/* Geometric polygon - hexagon with 3D effect */}
     <Box
       sx={{
         position: 'absolute',
@@ -93,13 +191,41 @@ const GradientSlide = ({ page, firstPageContent }: GradientSlideProps): React.JS
         right: '12%',
         width: { xs: 60, sm: 90, md: 120 },
         height: { xs: 60, sm: 90, md: 120 },
-        background: `${page.colors.accent}25`,
+        background: `conic-gradient(from 0deg at 50% 50%, ${page.colors.accent}40, ${page.colors.primary}40, ${page.colors.accent}40)`,
         clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-        animation: 'spin 25s linear infinite',
+        animation: 'spin3D 25s linear infinite',
+        transform: 'perspective(600px)',
         zIndex: 0,
-        '@keyframes spin': {
-          from: { transform: 'rotate(0deg)' },
-          to: { transform: 'rotate(360deg)' },
+        '@keyframes spin3D': {
+          '0%': { transform: 'perspective(600px) rotateZ(0deg) rotateY(0deg)' },
+          '50%': { transform: 'perspective(600px) rotateZ(180deg) rotateY(180deg)' },
+          '100%': { transform: 'perspective(600px) rotateZ(360deg) rotateY(360deg)' },
+        },
+      }}
+    />
+
+    {/* Particle trail effect */}
+    <Box
+      sx={{
+        position: 'absolute',
+        top: '40%',
+        right: '5%',
+        width: { xs: 3, sm: 4, md: 5 },
+        height: { xs: 3, sm: 4, md: 5 },
+        borderRadius: '50%',
+        background: page.colors.accent,
+        boxShadow: `
+          0 0 10px ${page.colors.accent},
+          20px 20px 10px ${page.colors.accent}80,
+          40px 40px 10px ${page.colors.accent}60,
+          60px 60px 10px ${page.colors.accent}40,
+          80px 80px 10px ${page.colors.accent}20
+        `,
+        animation: 'particleTrail 8s ease-in-out infinite',
+        zIndex: 0,
+        '@keyframes particleTrail': {
+          '0%, 100%': { transform: 'translate(0, 0)', opacity: 0.8 },
+          '50%': { transform: 'translate(-100px, 80px)', opacity: 0.3 },
         },
       }}
     />
@@ -153,33 +279,116 @@ const GradientSlide = ({ page, firstPageContent }: GradientSlideProps): React.JS
       }}
     />
 
-    <Box sx={{ zIndex: 1, position: 'relative' }}>{firstPageContent}</Box>
+    {/* Animated noise texture overlay */}
+    <Box
+      sx={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        opacity: 0.03,
+        background: `repeating-radial-gradient(circle at 0 0, transparent 0, #000 10px),
+                     repeating-linear-gradient(#000, transparent)`,
+        backgroundSize: '100px 100px, 100px 100px',
+        animation: 'noiseMove 8s steps(10) infinite',
+        mixBlendMode: 'overlay',
+        pointerEvents: 'none',
+        zIndex: 2,
+        '@keyframes noiseMove': {
+          '0%': { transform: 'translate(0, 0)' },
+          '10%': { transform: 'translate(-5%, -10%)' },
+          '20%': { transform: 'translate(-15%, 5%)' },
+          '30%': { transform: 'translate(7%, -25%)' },
+          '40%': { transform: 'translate(-5%, 25%)' },
+          '50%': { transform: 'translate(-15%, 10%)' },
+          '60%': { transform: 'translate(15%, 0%)' },
+          '70%': { transform: 'translate(0%, 15%)' },
+          '80%': { transform: 'translate(3%, 25%)' },
+          '90%': { transform: 'translate(-10%, 10%)' },
+          '100%': { transform: 'translate(0, 0)' },
+        },
+      }}
+    />
 
-    {/* Emoji with glow effect */}
+    <Box sx={{ zIndex: 3, position: 'relative' }}>{firstPageContent}</Box>
+
+    {/* Emoji with neon glow effect */}
     <Typography
       sx={{
         fontSize: { xs: '3rem', sm: '4.5rem', md: '6rem' },
         mb: { xs: 1, sm: 1.5, md: 2 },
-        zIndex: 1,
+        zIndex: 3,
         position: 'relative',
-        filter: 'drop-shadow(0 0 20px rgba(255,255,255,0.5))',
+        filter: `
+          drop-shadow(0 0 10px ${page.colors.accent})
+          drop-shadow(0 0 20px ${page.colors.accent}80)
+          drop-shadow(0 0 30px ${page.colors.primary}60)
+        `,
+        animation: 'neonPulse 3s ease-in-out infinite',
+        '@keyframes neonPulse': {
+          '0%, 100%': {
+            filter: `
+              drop-shadow(0 0 10px ${page.colors.accent})
+              drop-shadow(0 0 20px ${page.colors.accent}80)
+              drop-shadow(0 0 30px ${page.colors.primary}60)
+            `,
+          },
+          '50%': {
+            filter: `
+              drop-shadow(0 0 15px ${page.colors.accent})
+              drop-shadow(0 0 30px ${page.colors.accent})
+              drop-shadow(0 0 45px ${page.colors.primary}80)
+            `,
+          },
+        },
       }}
     >
       {page.emoji}
     </Typography>
 
-    {/* Title */}
+    {/* Glassmorphism overlay container */}
+    <Box
+      sx={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: '85%',
+        maxWidth: '900px',
+        background: 'rgba(255, 255, 255, 0.08)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        border: '1px solid rgba(255, 255, 255, 0.15)',
+        borderRadius: { xs: '16px', sm: '20px', md: '24px' },
+        boxShadow: `
+          0 8px 32px rgba(0, 0, 0, 0.1),
+          inset 0 1px 0 rgba(255, 255, 255, 0.2),
+          0 0 40px ${page.colors.accent}20
+        `,
+        padding: { xs: 3, sm: 4, md: 5 },
+        zIndex: 2,
+        pointerEvents: 'none',
+      }}
+    />
+
+    {/* Title with neon glow */}
     <Typography
       sx={{
         fontSize: { xs: '1.75rem', sm: '2.5rem', md: '3.5rem' },
         fontWeight: 900,
         color: '#FFFFFF',
         textAlign: 'center',
-        textShadow: '0 2px 4px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.5), 0 8px 24px rgba(0,0,0,0.3)',
+        textShadow: `
+          0 0 10px ${page.colors.accent},
+          0 0 20px ${page.colors.accent}80,
+          0 0 30px ${page.colors.primary}60,
+          0 2px 4px rgba(0,0,0,0.4),
+          0 4px 12px rgba(0,0,0,0.5)
+        `,
         fontFamily: 'Roboto, sans-serif',
         letterSpacing: '-0.02em',
         mb: { xs: 0.5, sm: 0.75, md: 1 },
-        zIndex: 1,
+        zIndex: 3,
         position: 'relative',
         maxWidth: '80%',
         px: 2,

@@ -25,6 +25,48 @@ const CardSlide = ({ page, firstPageContent }: CardSlideProps): React.JSX.Elemen
   >
     {firstPageContent}
 
+    {/* Liquid gooey particles */}
+    <Box
+      sx={{
+        position: 'absolute',
+        top: '30%',
+        right: '18%',
+        filter: 'contrast(25) blur(8px)',
+        zIndex: 0,
+        pointerEvents: 'none',
+      }}
+    >
+      <Box
+        sx={{
+          position: 'absolute',
+          width: { xs: 40, sm: 60, md: 80 },
+          height: { xs: 40, sm: 60, md: 80 },
+          borderRadius: '50%',
+          background: `${page.colors.primary}70`,
+          animation: 'gooeyDance1 10s ease-in-out infinite',
+          '@keyframes gooeyDance1': {
+            '0%, 100%': { transform: 'translate(0, 0)' },
+            '33%': { transform: 'translate(30px, -25px)' },
+            '66%': { transform: 'translate(-20px, 40px)' },
+          },
+        }}
+      />
+      <Box
+        sx={{
+          position: 'absolute',
+          width: { xs: 35, sm: 50, md: 70 },
+          height: { xs: 35, sm: 50, md: 70 },
+          borderRadius: '50%',
+          background: `${page.colors.accent}70`,
+          animation: 'gooeyDance2 12s ease-in-out infinite 2s',
+          '@keyframes gooeyDance2': {
+            '0%, 100%': { transform: 'translate(0, 0)' },
+            '50%': { transform: 'translate(-35px, 30px)' },
+          },
+        }}
+      />
+    </Box>
+
     {/* Animated blob shape 1 */}
     <Box
       sx={{
@@ -65,7 +107,7 @@ const CardSlide = ({ page, firstPageContent }: CardSlideProps): React.JSX.Elemen
       }}
     />
 
-    {/* Geometric circle with gradient border */}
+    {/* Geometric circle with 3D gradient border */}
     <Box
       sx={{
         position: 'absolute',
@@ -76,11 +118,39 @@ const CardSlide = ({ page, firstPageContent }: CardSlideProps): React.JSX.Elemen
         borderRadius: '50%',
         background: `conic-gradient(from 45deg, ${page.colors.primary}40, ${page.colors.accent}40, ${page.colors.primary}40)`,
         opacity: 0.3,
-        animation: 'spinSlow 30s linear infinite',
+        animation: 'spinSlow3D 30s linear infinite',
+        transform: 'perspective(500px)',
+        mixBlendMode: 'multiply',
         zIndex: 0,
-        '@keyframes spinSlow': {
-          from: { transform: 'rotate(0deg)' },
-          to: { transform: 'rotate(360deg)' },
+        '@keyframes spinSlow3D': {
+          '0%': { transform: 'perspective(500px) rotateZ(0deg) rotateX(0deg)' },
+          '50%': { transform: 'perspective(500px) rotateZ(180deg) rotateX(15deg)' },
+          '100%': { transform: 'perspective(500px) rotateZ(360deg) rotateX(0deg)' },
+        },
+      }}
+    />
+
+    {/* Floating particle with trail */}
+    <Box
+      sx={{
+        position: 'absolute',
+        top: '55%',
+        right: '25%',
+        width: { xs: 4, sm: 5, md: 6 },
+        height: { xs: 4, sm: 5, md: 6 },
+        borderRadius: '50%',
+        background: page.colors.primary,
+        boxShadow: `
+          0 0 8px ${page.colors.primary},
+          -15px -15px 8px ${page.colors.primary}70,
+          -30px -30px 8px ${page.colors.primary}50,
+          -45px -45px 8px ${page.colors.primary}30
+        `,
+        animation: 'particleRise 10s ease-in-out infinite',
+        zIndex: 0,
+        '@keyframes particleRise': {
+          '0%, 100%': { transform: 'translate(0, 0)', opacity: 0.7 },
+          '50%': { transform: 'translate(60px, -90px)', opacity: 0.2 },
         },
       }}
     />
@@ -174,15 +244,46 @@ const CardSlide = ({ page, firstPageContent }: CardSlideProps): React.JSX.Elemen
       }}
     />
 
-    {/* Main card */}
+    {/* Animated noise texture overlay */}
     <Box
       sx={{
-        background: '#FFFFFF',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        opacity: 0.025,
+        background: `repeating-radial-gradient(circle at 50% 50%, transparent 0, #000 8px),
+                     repeating-linear-gradient(#000, transparent)`,
+        backgroundSize: '80px 80px, 80px 80px',
+        animation: 'noiseShift 8s steps(10) infinite',
+        mixBlendMode: 'overlay',
+        pointerEvents: 'none',
+        zIndex: 2,
+        '@keyframes noiseShift': {
+          '0%': { transform: 'translate(0, 0) rotate(0deg)' },
+          '25%': { transform: 'translate(-10%, 5%) rotate(90deg)' },
+          '50%': { transform: 'translate(5%, -10%) rotate(180deg)' },
+          '75%': { transform: 'translate(-5%, 10%) rotate(270deg)' },
+          '100%': { transform: 'translate(0, 0) rotate(360deg)' },
+        },
+      }}
+    />
+
+    {/* Main card with glassmorphism and 3D tilt */}
+    <Box
+      sx={{
+        background: `
+          linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,1) 100%)
+        `,
+        backdropFilter: 'blur(15px) saturate(150%)',
         borderRadius: { xs: '20px', sm: '28px', md: '32px' },
         boxShadow: `
           0 20px 60px rgba(0,0,0,0.15),
           0 10px 30px rgba(0,0,0,0.1),
-          0 0 0 1px ${page.colors.accent}20
+          0 0 0 1px ${page.colors.accent}20,
+          inset 0 1px 0 rgba(255,255,255,0.8),
+          0 0 60px ${page.colors.primary}15
         `,
         padding: { xs: '30px 20px', sm: '40px 35px', md: '60px 50px' },
         maxWidth: '80%',
@@ -190,24 +291,65 @@ const CardSlide = ({ page, firstPageContent }: CardSlideProps): React.JSX.Elemen
         borderLeft: `8px solid ${page.colors.accent}`,
         borderImage: `linear-gradient(to bottom, ${page.colors.primary}, ${page.colors.accent}) 1`,
         position: 'relative',
-        zIndex: 1,
+        zIndex: 3,
+        transform: 'perspective(1000px) rotateY(2deg)',
+        animation: 'cardTilt 20s ease-in-out infinite',
+        '@keyframes cardTilt': {
+          '0%, 100%': { transform: 'perspective(1000px) rotateY(2deg)' },
+          '50%': { transform: 'perspective(1000px) rotateY(-2deg)' },
+        },
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '1px',
+          background: `linear-gradient(90deg, transparent, ${page.colors.accent}80, transparent)`,
+          opacity: 0.6,
+        },
       }}
     >
-      {/* Emoji badge */}
+      {/* Emoji badge with neon glow */}
       <Box
         sx={{
           position: 'absolute',
           top: { xs: -28, sm: -34, md: -40 },
           left: '50%',
           transform: 'translateX(-50%)',
-          background: page.colors.primary,
+          background: `radial-gradient(circle, ${page.colors.primary}, ${page.colors.primary}DD)`,
           borderRadius: '50%',
           width: { xs: 56, sm: 68, md: 80 },
           height: { xs: 56, sm: 68, md: 80 },
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+          boxShadow: `
+            0 8px 24px rgba(0,0,0,0.2),
+            0 0 20px ${page.colors.primary}80,
+            0 0 40px ${page.colors.accent}40,
+            inset 0 1px 0 rgba(255,255,255,0.3)
+          `,
+          border: `2px solid ${page.colors.accent}40`,
+          animation: 'badgeGlow 4s ease-in-out infinite',
+          '@keyframes badgeGlow': {
+            '0%, 100%': {
+              boxShadow: `
+                0 8px 24px rgba(0,0,0,0.2),
+                0 0 20px ${page.colors.primary}80,
+                0 0 40px ${page.colors.accent}40,
+                inset 0 1px 0 rgba(255,255,255,0.3)
+              `,
+            },
+            '50%': {
+              boxShadow: `
+                0 8px 24px rgba(0,0,0,0.2),
+                0 0 30px ${page.colors.primary},
+                0 0 60px ${page.colors.accent}60,
+                inset 0 1px 0 rgba(255,255,255,0.3)
+              `,
+            },
+          },
         }}
       >
         <Typography sx={{ fontSize: { xs: '2rem', sm: '2.5rem', md: '3rem' } }}>{page.emoji}</Typography>
