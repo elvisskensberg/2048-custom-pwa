@@ -145,14 +145,10 @@ export const baseContent: BaseContentItem[] = [
     ],
   },
   {
-    title: 'Layout & CSS',
-    subtitle: 'Responsive Design',
-    emoji: '📐',
-    content: [
-      'Fully responsive layout working across all device sizes.',
-      'Fixed viewport width issues (100% instead of 100vw).',
-      'Flexbox-based centering with absolute positioning for UI controls.',
-    ],
+    title: 'The fun part 🎉',
+    subtitle: 'Ask AI to create 2048 game or similar, should take it 2 mins, really easy',
+    emoji: '🎮',
+    content: [],
   },
   {
     title: 'Did you know?',
@@ -183,9 +179,15 @@ export const baseContent: BaseContentItem[] = [
   },
   {
     title: 'last one I promise 🙏',
-    subtitle: 'Strategic Technical Leader: Aligning stakeholders and engineering teams through AI-enhanced Agile workflows to unblock delivery and maximize ROI across global markets.',
+    subtitle: 'Strategic Technical Leader: Aligning stakeholders and engineering teams through AI-enhanced Agile workflows',
     emoji: '🎯',
-    content: [],
+    content: [
+      '🚀 Unblock delivery and maximize ROI across global markets',
+      '🤝 Bridge technical and business stakeholders with AI-enhanced workflows',
+      '📊 Drive Agile transformation using Claude.ai for sprint planning and retrospectives',
+      '💡 Champion innovation through rapid prototyping and continuous experimentation',
+      '🌍 Lead distributed teams across time zones with async-first collaboration',
+    ],
     image: linkedInPhoto,
   },
   {
@@ -272,11 +274,31 @@ export const pages: PageData[] = baseContent.map((item, index) => {
   const isCardVariant = index === 3 || index === 6 || index === 7
   const isFunkyVariant = index >= 13 && index <= 19
   const design = isFunkyVariant ? 'funky' : (isCardVariant ? 'card' : 'gradient')
+
+  // Special ultra-vibrant color schemes
+  const ultraVibrantScheme17 = {
+    primary: '#FF00FF',  // Magenta
+    secondary: '#00FFFF', // Cyan
+    accent: '#FFFF00'     // Yellow
+  }
+
+  const partyScheme10 = {
+    primary: '#FF1493',  // Deep Pink
+    secondary: '#FFD700', // Gold
+    accent: '#00FF7F'     // Spring Green
+  }
+
   const colorIndex = (index * 3 + (isFunkyVariant ? 2 : isCardVariant ? 1 : 0)) % colorSchemes.length
+
+  // Apply special color schemes
+  let colors = colorSchemes[colorIndex]
+  if (index === 17) colors = ultraVibrantScheme17
+  if (index === 9) colors = partyScheme10
+
   return {
     ...item,
     design: design as DesignVariant,
-    colors: colorSchemes[colorIndex],
+    colors,
   }
 })
 
