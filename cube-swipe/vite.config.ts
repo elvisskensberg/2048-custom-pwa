@@ -31,7 +31,9 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
+          // Google Fonts - Cache first (1 year)
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
@@ -44,6 +46,36 @@ export default defineConfig({
               cacheableResponse: {
                 statuses: [0, 200]
               }
+            }
+          },
+          // Application Insights - Network only (no caching)
+          {
+            urlPattern: /^https:\/\/.*\.applicationinsights\.io\/.*/i,
+            handler: 'NetworkOnly'
+          },
+          // Game assets (images, sounds) - Stale while revalidate
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'game-assets-cache',
+              expiration: {
+                maxEntries: 60,
+                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 days
+              }
+            }
+          },
+          // API calls - Network first, fallback to cache
+          {
+            urlPattern: /^https:\/\/script\.google\.com\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 5 * 60 // 5 minutes
+              },
+              networkTimeoutSeconds: 10
             }
           }
         ]
