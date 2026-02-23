@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Box, Button, Typography } from '@mui/material'
 import { useGesture } from '@use-gesture/react'
 import { useGameLogic } from '../hooks/useGameLogic'
+import { useWakeLock } from '../hooks/useWakeLock'
 import { AppVersion } from './AppVersion'
 
 const TILE_COLORS: Record<number, string> = {
@@ -56,6 +57,9 @@ interface GameBoardProps {
 
 export const GameBoard = ({ gameMode }: GameBoardProps) => {
   const { grid, score, gameOver, handleSwipe, resetGame } = useGameLogic(gameMode)
+
+  // Keep screen awake during active gameplay
+  useWakeLock(!gameOver)
 
   const bind = useGesture({
     onDrag: ({ movement: [mx, my], last }) => {

@@ -9,9 +9,10 @@ interface MainMenuProps {
   onOpenAbout: () => void
   onOpenComments: () => void
   onOpenTemplates: () => void
+  onOpenMonopolyDeal: () => void
 }
 
-export const MainMenu = ({ onStartGame, onOpenAbout, onOpenComments, onOpenTemplates }: MainMenuProps) => {
+export const MainMenu = ({ onStartGame, onOpenAbout, onOpenComments, onOpenTemplates, onOpenMonopolyDeal }: MainMenuProps) => {
   const { isAppInstalled, handleInstall, handleShare } = useInstallPrompt()
 
   const handleDownloadCV = () => {
@@ -34,6 +35,25 @@ export const MainMenu = ({ onStartGame, onOpenAbout, onOpenComments, onOpenTempl
         }}
       >
         Play 2048
+      </Button>
+      <Button
+        variant="contained"
+        fullWidth
+        onClick={onOpenMonopolyDeal}
+        sx={{
+          py: 1.5,
+          fontSize: '1.1rem',
+          textTransform: 'none',
+          background: 'linear-gradient(135deg, #FF6F00 0%, #FFA726 100%)',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+          '&:hover': {
+            background: 'linear-gradient(135deg, #FF6F00 0%, #FFA726 100%)',
+            transform: 'translateY(-2px)',
+            boxShadow: '0 4px 12px rgba(255, 111, 0, 0.4)',
+          },
+        }}
+      >
+        Monopoly Deal
       </Button>
       <Button
         variant="outlined"

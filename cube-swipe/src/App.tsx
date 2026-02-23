@@ -12,6 +12,8 @@ import { GameBoard } from './components/GameBoard'
 import { LeaveCommentForm } from './components/LeaveCommentForm'
 import { AboutSection } from './components/AboutSection'
 import { TemplatesSection } from './components/TemplatesSection'
+import { MonopolyDealBoard } from './components/MonopolyDealBoard'
+import { OfflineIndicator } from './components/OfflineIndicator'
 import { testGoogleScriptAPI } from './utils/testGoogleScript'
 
 function App() {
@@ -20,6 +22,7 @@ function App() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
+  const [monopolyDealOpen, setMonopolyDealOpen] = useState(false)
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light')
 
   const theme = useMemo(
@@ -52,19 +55,23 @@ function App() {
     ? 'game'
     : gameStarted
       ? 'modeSelect'
-      : aboutOpen
-        ? 'about'
-        : templatesOpen
-          ? 'templates'
-          : commentsOpen
-            ? 'comments'
-            : 'menu'
+      : monopolyDealOpen
+        ? 'monopolyDeal'
+        : aboutOpen
+          ? 'about'
+          : templatesOpen
+            ? 'templates'
+            : commentsOpen
+              ? 'comments'
+              : 'menu'
 
   const handleBack = () => {
     if (gameMode) {
       setGameMode(null)
     } else if (gameStarted) {
       setGameStarted(false)
+    } else if (monopolyDealOpen) {
+      setMonopolyDealOpen(false)
     } else if (aboutOpen) {
       setAboutOpen(false)
     } else if (templatesOpen) {
@@ -77,6 +84,7 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <UpdatePrompt />
+      <OfflineIndicator />
       <Box
         sx={{
           height: '100vh',
@@ -86,22 +94,22 @@ function App() {
           alignItems: 'center',
           justifyContent: 'flex-start',
           bgcolor: 'background.default',
-          pt: aboutOpen || templatesOpen ? 0 : { xs: 8, sm: 10 },
+          pt: aboutOpen || templatesOpen || monopolyDealOpen ? 0 : { xs: 8, sm: 10 },
           overflow: 'hidden',
         }}
       >
-        {!aboutOpen && !templatesOpen && (gameStarted || commentsOpen) && (
+        {!aboutOpen && !templatesOpen && !monopolyDealOpen && (gameStarted || commentsOpen) && (
           <BackButton onClick={handleBack} />
         )}
 
-        {!aboutOpen && !templatesOpen && (
+        {!aboutOpen && !templatesOpen && !monopolyDealOpen && (
           <ThemeToggle
             themeMode={themeMode}
             onToggle={() => setThemeMode((prev) => (prev === 'light' ? 'dark' : 'light'))}
           />
         )}
 
-        {!aboutOpen && !templatesOpen && (
+        {!aboutOpen && !templatesOpen && !monopolyDealOpen && (
           <Typography
             variant="h3"
             component="h1"
@@ -124,6 +132,7 @@ function App() {
             onOpenAbout={() => setAboutOpen(true)}
             onOpenTemplates={() => setTemplatesOpen(true)}
             onOpenComments={() => setCommentsOpen(true)}
+            onOpenMonopolyDeal={() => setMonopolyDealOpen(true)}
           />
         )}
         {currentView === 'modeSelect' && <GameModeSelect onSelectMode={setGameMode} />}
@@ -131,6 +140,7 @@ function App() {
         {currentView === 'templates' && <TemplatesSection />}
         {currentView === 'comments' && <LeaveCommentForm onClose={() => setCommentsOpen(false)} />}
         {currentView === 'game' && gameMode && <GameBoard gameMode={gameMode} />}
+        {currentView === 'monopolyDeal' && <MonopolyDealBoard onBack={handleBack} />}
       </Box>
     </ThemeProvider>
   )

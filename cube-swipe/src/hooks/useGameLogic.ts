@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { saveGameState, loadGameState, clearGameState } from '../utils/gameStateSync'
 
 type GameMode = 'classic' | 'fibonacci'
 
@@ -200,6 +201,33 @@ export const useGameLogic = (gameMode: GameMode): UseGameLogicReturn => {
   const [grid, setGrid] = useState<number[][]>(() => initializeGrid(gameMode))
   const [score, setScore] = useState(0)
   const [gameOver, setGameOver] = useState(false)
+  const loadedRef = useRef(false)
+
+  // Restore game state from IndexedDB on first mount
+  useEffect(() => {
+    if (loadedRef.current) return
+    loadedRef.current = true
+
+    loadGameState().then((saved) => {
+      if (saved && saved.gameMode === gameMode) {
+        setGrid(saved.grid)
+        setScore(saved.score)
+        if (!checkCanMove(saved.grid)) {
+          setGameOver(true)
+        }
+      }
+    }).catch(() => {
+      // IndexedDB unavailable — start fresh
+    })
+  }, [gameMode, checkCanMove])
+
+  // Persist game state to IndexedDB after each move
+  useEffect(() => {
+    if (!loadedRef.current) return
+    saveGameState({ grid, score, bestScore: score, gameMode, timestamp: Date.now() }).catch(() => {
+      // IndexedDB unavailable — silently skip
+    })
+  }, [grid, score, gameMode])
 
   const handleSwipe = useCallback(
     (direction: 'left' | 'right' | 'up' | 'down') => {
@@ -224,6 +252,9 @@ export const useGameLogic = (gameMode: GameMode): UseGameLogicReturn => {
   )
 
   const resetGame = useCallback(() => {
+    clearGameState().catch(() => {
+      // IndexedDB unavailable — silently skip
+    })
     setGrid(initializeGrid(gameMode))
     setScore(0)
     setGameOver(false)

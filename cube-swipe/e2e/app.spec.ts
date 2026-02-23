@@ -173,6 +173,19 @@ test.describe('Elvis Skensberg AI Showcase', () => {
     }
   })
 
+  test('should navigate to Monopoly Deal screen', async ({ page }, testInfo) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Monopoly Deal' }).click()
+    await expect(page.getByText('Your Field')).toBeVisible()
+    await expect(page.getByText('Opponent')).toBeVisible()
+
+    await page.screenshot({
+      path: `e2e/screenshots/${testInfo.project.name}/app-monopoly-deal.png`,
+      fullPage: true,
+      scale: 'device',
+    })
+  })
+
   test('should navigate to Leave Comment screen', async ({ page }, testInfo) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'Leave Comment' }).click()

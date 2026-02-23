@@ -66,6 +66,53 @@ export default defineConfig({
         hasTouch: true,
       },
     },
+    // --- Landscape profiles ---
+    {
+      name: 'iPhone 14 Landscape',
+      use: {
+        ...devices['iPhone 14'],
+        viewport: { width: 844, height: 390 },
+      },
+    },
+    {
+      name: 'Galaxy S24 Ultra Landscape',
+      use: {
+        ...devices['Galaxy S9+'],
+        viewport: { width: 915, height: 412 },
+        deviceScaleFactor: 3.5,
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
+    {
+      name: 'iPad 11th Gen Landscape',
+      use: {
+        ...devices['iPad Pro 11'],
+        viewport: { width: 1194, height: 834 },
+        deviceScaleFactor: 2,
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
+    {
+      name: 'Galaxy Tab S10 Landscape',
+      use: {
+        ...devices['Galaxy Tab S4'],
+        viewport: { width: 1280, height: 800 },
+        deviceScaleFactor: 2.5,
+        isMobile: true,
+        hasTouch: true,
+      },
+    },
+    {
+      name: 'Desktop-1080p Landscape',
+      use: {
+        viewport: { width: 1920, height: 1080 },
+        deviceScaleFactor: 2,
+        isMobile: false,
+        hasTouch: false,
+      },
+    },
   ],
   webServer: {
     command: 'npm run dev',
