@@ -436,6 +436,7 @@ describe('gameEngine', () => {
       const state = makeState({
         player: { hand: [card], field: [], bank: [] },
         turnPhase: { type: 'play', playsRemaining: 2 },
+        playsUsedThisTurn: 1,
       })
 
       const next = bankCard(state, card.id)
@@ -857,7 +858,8 @@ describe('gameEngine', () => {
     it('transitions to give phase', () => {
       const card = findCardById('a-fd-1')
       const state = makeState({
-        player: { hand: [card], field: [], bank: [] },
+        player: { hand: [card], field: [makeGroup('brown', ['p-brown-1'])], bank: [] },
+        ai: { hand: [], field: [makeGroup('red', ['p-red-1'])], bank: [] },
       })
 
       const next = playForcedDeal(state, card.id)
@@ -865,6 +867,28 @@ describe('gameEngine', () => {
       if (next.turnPhase.type === 'awaitingForcedDealSelect') {
         expect(next.turnPhase.phase).toBe('give')
       }
+    })
+
+    it('does nothing when current player has no stealable properties to give', () => {
+      const card = findCardById('a-fd-1')
+      const state = makeState({
+        player: { hand: [card], field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])], bank: [] },
+        ai: { hand: [], field: [makeGroup('red', ['p-red-1'])], bank: [] },
+      })
+
+      const next = playForcedDeal(state, card.id)
+      expect(next).toBe(state)
+    })
+
+    it('does nothing when opponent has no stealable properties to take', () => {
+      const card = findCardById('a-fd-1')
+      const state = makeState({
+        player: { hand: [card], field: [makeGroup('brown', ['p-brown-1'])], bank: [] },
+        ai: { hand: [], field: [makeGroup('red', ['p-red-1', 'p-red-2', 'p-red-3'])], bank: [] },
+      })
+
+      const next = playForcedDeal(state, card.id)
+      expect(next).toBe(state)
     })
 
     it('completeForcedDeal swaps properties', () => {
@@ -887,6 +911,26 @@ describe('gameEngine', () => {
       // Player should now have red, AI should have brown
       expect(next.player.field.find((g) => g.color === 'red')?.cards[0].id).toBe('p-red-1')
       expect(next.ai.field.find((g) => g.color === 'brown')?.cards[0].id).toBe('p-brown-1')
+    })
+
+    it('completeForcedDeal rejects giving a card from a complete set', () => {
+      const state = makeState({
+        turnPhase: { type: 'awaitingForcedDealSelect', phase: 'give' },
+        playsUsedThisTurn: 1,
+        player: {
+          hand: [],
+          field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])],
+          bank: [],
+        },
+        ai: {
+          hand: [],
+          field: [makeGroup('red', ['p-red-1'])],
+          bank: [],
+        },
+      })
+
+      const next = completeForcedDeal(state, 'p-brown-1', 'p-red-1')
+      expect(next).toBe(state)
     })
   })
 
@@ -941,6 +985,42 @@ describe('gameEngine', () => {
       expect(next.player.field[0].color).toBe('brown')
       expect(next.player.field[0].cards).toHaveLength(2)
       expect(next.player.field[0].buildings).toHaveLength(1)
+      expect(next.ai.field).toHaveLength(0)
+    })
+
+    it('completeDealBreaker merges with existing same-color group', () => {
+      const myDarkBlue = { ...findCardById('p-db-1'), id: 'p-db-mine' }
+      const oppDarkBlue1 = { ...findCardById('p-db-1'), id: 'p-db-opp-1' }
+      const oppDarkBlue2 = { ...findCardById('p-db-2'), id: 'p-db-opp-2' }
+
+      const state = makeState({
+        turnPhase: { type: 'awaitingDealBreakerTarget' },
+        playsUsedThisTurn: 1,
+        player: {
+          hand: [],
+          field: [{
+            color: 'darkBlue',
+            cards: [myDarkBlue],
+            buildings: [],
+          }],
+          bank: [],
+        },
+        ai: {
+          hand: [],
+          field: [{
+            color: 'darkBlue',
+            cards: [oppDarkBlue1, oppDarkBlue2],
+            buildings: [findCardById('b-house-1')],
+          }],
+          bank: [],
+        },
+      })
+
+      const next = completeDealBreaker(state, 'darkBlue')
+      const darkBlueGroups = next.player.field.filter((g) => g.color === 'darkBlue')
+      expect(darkBlueGroups).toHaveLength(1)
+      expect(darkBlueGroups[0].cards).toHaveLength(3)
+      expect(darkBlueGroups[0].buildings).toHaveLength(1)
       expect(next.ai.field).toHaveLength(0)
     })
   })

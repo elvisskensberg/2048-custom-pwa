@@ -36,6 +36,7 @@ export interface AIDecision {
     | 'discard'
     | 'selectTarget'
     | 'selectColor'
+    | 'wait'
   cardId?: string
   targetColor?: PropertyColor
   targetCardId?: string
@@ -92,8 +93,13 @@ interface ScoredPlay {
 function choosePlay(state: MonopolyDealState, ai: PlayerState, playsRemaining: number): AIDecision {
   if (playsRemaining <= 0 || ai.hand.length === 0) return { type: 'endTurn' }
 
-  const plays: ScoredPlay[] = []
+  const candidates: ScoredPlay[] = []
   const opponent = state.player
+  const completeSetCount = countCompleteSets(ai)
+
+  function consider(play: ScoredPlay | null): void {
+    if (play) candidates.push(play)
+  }
 
   for (const card of ai.hand) {
     // Skip Double Rent (only played with rent cards)
@@ -101,8 +107,8 @@ function choosePlay(state: MonopolyDealState, ai: PlayerState, playsRemaining: n
 
     switch (card.type) {
       case 'property': {
-        const score = scorePropertyPlay(ai, card)
-        plays.push({
+        const score = scorePropertyPlay(ai, card, undefined, completeSetCount)
+        consider({
           decision: { type: 'playProperty', cardId: card.id, targetColor: card.color! },
           score,
         })
@@ -112,8 +118,8 @@ function choosePlay(state: MonopolyDealState, ai: PlayerState, playsRemaining: n
         if (card.color && card.color2) {
           // Dual wild — choose best color
           const color = pickBestWildColor(ai, card.color, card.color2)
-          const score = scorePropertyPlay(ai, card, color)
-          plays.push({
+          const score = scorePropertyPlay(ai, card, color, completeSetCount)
+          consider({
             decision: { type: 'playProperty', cardId: card.id, targetColor: color },
             score: score + 2, // Small bonus for flexibility
           })
@@ -121,16 +127,16 @@ function choosePlay(state: MonopolyDealState, ai: PlayerState, playsRemaining: n
           // Rainbow wild — pick most-needed color
           const color = pickBestRainbowColor(ai)
           if (color) {
-            plays.push({
+            consider({
               decision: { type: 'playProperty', cardId: card.id, targetColor: color },
-              score: scorePropertyPlay(ai, card, color) + 5,
+              score: scorePropertyPlay(ai, card, color, completeSetCount) + 5,
             })
           }
         }
         break
       }
       case 'money': {
-        plays.push({
+        consider({
           decision: { type: 'bankCard', cardId: card.id },
           score: 20 + card.value,
         })
@@ -139,7 +145,7 @@ function choosePlay(state: MonopolyDealState, ai: PlayerState, playsRemaining: n
       case 'building': {
         for (const group of ai.field) {
           if (canPlaceBuilding(card, group)) {
-            plays.push({
+            consider({
               decision: { type: 'playBuilding', cardId: card.id, targetColor: group.color },
               score: 45,
             })
@@ -148,32 +154,33 @@ function choosePlay(state: MonopolyDealState, ai: PlayerState, playsRemaining: n
         break
       }
       case 'rent': {
-        const rentScore = scoreRentPlay(ai, card, playsRemaining)
-        if (rentScore.score > 0) {
-          plays.push(rentScore)
-        }
+        consider(scoreRentPlay(ai, card, playsRemaining))
         break
       }
       case 'action': {
-        const actionScore = scoreActionPlay(state, ai, opponent, card)
-        if (actionScore) plays.push(actionScore)
+        consider(scoreActionPlay(state, ai, opponent, card))
         break
       }
     }
   }
 
-  if (plays.length === 0) return { type: 'endTurn' }
+  if (candidates.length === 0) return { type: 'endTurn' }
 
-  // Sort by score descending
-  plays.sort((a, b) => b.score - a.score)
+  candidates.sort((a, b) => b.score - a.score)
+  const bestPlay = candidates[0]
 
   // Only play if score is above minimum threshold
-  if (plays[0].score < 5) return { type: 'endTurn' }
+  if (bestPlay.score < 5) return { type: 'endTurn' }
 
-  return plays[0].decision
+  return bestPlay.decision
 }
 
-function scorePropertyPlay(ai: PlayerState, card: MonopolyCardData, color?: PropertyColor): number {
+function scorePropertyPlay(
+  ai: PlayerState,
+  card: MonopolyCardData,
+  color: PropertyColor | undefined,
+  completeSetCount: number,
+): number {
   const targetColor = color ?? card.color
   if (!targetColor) return 0
 
@@ -181,11 +188,13 @@ function scorePropertyPlay(ai: PlayerState, card: MonopolyCardData, color?: Prop
   const current = group ? group.cards.length : 0
   const needed = SET_SIZE[targetColor]
 
-  // Check if this completes a set
-  if (current + 1 >= needed) {
+  // Already complete: low strategic value to pile more cards here.
+  if (current >= needed) return 2
+
+  // Check if this newly completes a set.
+  if (current + 1 === needed) {
     // Check if this would be the 3rd complete set (instant win!)
-    const completeSets = countCompleteSets(ai)
-    const wouldBeComplete = completeSets + 1
+    const wouldBeComplete = completeSetCount + 1
     if (wouldBeComplete >= 3) return 100 // WIN MOVE
     return 70 // Completing a set is very valuable
   }
@@ -231,7 +240,7 @@ function scoreRentPlay(
   ai: PlayerState,
   card: MonopolyCardData,
   playsRemaining: number,
-): ScoredPlay {
+): ScoredPlay | null {
   // Determine which colors this rent card covers
   const colors: PropertyColor[] = []
   if (card.color) colors.push(card.color)
@@ -255,7 +264,7 @@ function scoreRentPlay(
   }
 
   if (!bestColor || bestRent < 1) {
-    return { decision: { type: 'endTurn' }, score: 0 }
+    return null
   }
 
   // Check for Double Rent combo
@@ -373,9 +382,11 @@ function chooseForcedDealTargets(state: MonopolyDealState): AIDecision {
     // Give our least valuable non-set-contributing property
     const myStealable = getStealableProperties(state.ai)
     if (myStealable.length === 0) return { type: 'endTurn' }
-    // Sort by value ascending
-    myStealable.sort((a, b) => a.card.value - b.card.value)
-    return { type: 'selectTarget', yourCardId: myStealable[0].card.id }
+    let lowest = myStealable[0]
+    for (const candidate of myStealable) {
+      if (candidate.card.value < lowest.card.value) lowest = candidate
+    }
+    return { type: 'selectTarget', yourCardId: lowest.card.id }
   } else {
     // Take their most valuable property that helps our sets
     const targets = getStealableProperties(state.player)
@@ -423,9 +434,12 @@ function chooseWildColor(state: MonopolyDealState, cardId: string): AIDecision {
 
 function chooseRentColor(state: MonopolyDealState): AIDecision {
   // Pick the color with highest rent
+  const seen = new Set<PropertyColor>()
   let bestColor: PropertyColor | null = null
   let bestRent = 0
   for (const group of state.ai.field) {
+    if (seen.has(group.color)) continue
+    seen.add(group.color)
     const rent = calculateRent(state.ai, group.color, false)
     if (rent > bestRent) {
       bestRent = rent
@@ -441,7 +455,8 @@ function chooseRentColor(state: MonopolyDealState): AIDecision {
 
 function choosePayment(state: MonopolyDealState): AIDecision {
   if (state.turnPhase.type !== 'awaitingPayment') return { type: 'endTurn' }
-  const { amount } = state.turnPhase.debt
+  const { amount, debtor } = state.turnPhase.debt
+  if (debtor !== 'ai') return { type: 'wait' }
   const ai = state.ai
 
   const payable = getPayableCards(ai)
@@ -475,6 +490,7 @@ function choosePayment(state: MonopolyDealState): AIDecision {
 function chooseJSNResponse(state: MonopolyDealState): AIDecision {
   if (state.turnPhase.type !== 'awaitingJSN') return { type: 'endTurn' }
   const { jsnChain } = state.turnPhase
+  if (jsnChain.currentDecider !== 'ai') return { type: 'wait' }
 
   const ai = state.ai
   const jsnCard = ai.hand.find((c) => c.name === 'Just Say No')
@@ -502,7 +518,7 @@ function chooseJSNResponse(state: MonopolyDealState): AIDecision {
   if (actionName === 'Sly Deal') {
     // Check if any of our groups would break
     for (const group of ai.field) {
-      if (group.cards.length === SET_SIZE[group.color]) {
+      if (group.cards.length === SET_SIZE[group.color] - 1) {
         return { type: 'useJSN', cardId: jsnCard.id }
       }
     }

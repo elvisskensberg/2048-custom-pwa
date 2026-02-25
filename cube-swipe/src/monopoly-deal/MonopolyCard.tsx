@@ -1,5 +1,6 @@
 import { Box, Typography } from '@mui/material'
-import { type MonopolyCardData, COLOR_HEX, COLOR_RENT } from './cardData'
+import { type MonopolyCardData, type PropertyColor, COLOR_HEX, COLOR_RENT } from './cardData'
+import { getCardImageUrl } from './cardImages'
 
 interface MonopolyCardProps {
   card: MonopolyCardData
@@ -7,26 +8,30 @@ interface MonopolyCardProps {
   flipped?: boolean
   /** Scale multiplier (1 = 70×100 px) */
   size?: number
+  /** Group color the card is placed in (used to rotate dual-color wilds) */
+  groupColor?: PropertyColor
 }
 
 const BASE_W = 70
 const BASE_H = 100
 
-/** CSS-only replica of a single Monopoly Deal card. */
-export function MonopolyCard({ card, flipped = false, size = 1 }: MonopolyCardProps): React.JSX.Element {
-  const w = BASE_W * size
-  const h = BASE_H * size
+/** Monopoly Deal card — renders cropped image when available, CSS fallback otherwise. */
+export function MonopolyCard({ card, flipped = false, size = 1, groupColor }: MonopolyCardProps): React.JSX.Element {
+  const isMoney = card.type === 'money'
+  const w = (isMoney ? BASE_H : BASE_W) * size
+  const h = (isMoney ? BASE_W : BASE_H) * size
+  // Dual-color wilds should be rotated 180° when placed with their second color showing
+  const shouldRotate = groupColor && card.type === 'wild' && card.color2 === groupColor && card.color !== groupColor
 
   if (flipped) {
     return (
       <Box
         sx={{
-          width: w,
-          height: h,
+          width: BASE_W * size,
+          height: BASE_H * size,
           borderRadius: `${4 * size}px`,
-          border: '1px solid #999',
           background: 'linear-gradient(135deg, #1565C0 0%, #0D47A1 50%, #1565C0 100%)',
-          boxShadow: 1,
+          boxShadow: `0 ${2 * size}px ${6 * size}px rgba(0,0,0,0.25)`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -40,20 +45,65 @@ export function MonopolyCard({ card, flipped = false, size = 1 }: MonopolyCardPr
     )
   }
 
-  switch (card.type) {
-    case 'money':
-      return <MoneyFace card={card} w={w} h={h} size={size} />
-    case 'property':
-      return <PropertyFace card={card} w={w} h={h} size={size} />
-    case 'building':
-      return <BuildingFace card={card} w={w} h={h} size={size} />
-    case 'wild':
-      return <WildFace card={card} w={w} h={h} size={size} />
-    case 'rent':
-      return <RentFace card={card} w={w} h={h} size={size} />
-    default:
-      return <ActionFace card={card} w={w} h={h} size={size} />
+  // Use cropped card image when available
+  const imageUrl = getCardImageUrl(card.id)
+  let face: React.JSX.Element
+  if (imageUrl) {
+    face = <ImageFace src={imageUrl} alt={card.name} w={w} h={h} size={size} />
+  } else {
+    // CSS fallback for cards without images
+    switch (card.type) {
+      case 'money':
+        face = <MoneyFace card={card} w={w} h={h} size={size} />; break
+      case 'property':
+        face = <PropertyFace card={card} w={w} h={h} size={size} />; break
+      case 'building':
+        face = <BuildingFace card={card} w={w} h={h} size={size} />; break
+      case 'wild':
+        face = <WildFace card={card} w={w} h={h} size={size} />; break
+      case 'rent':
+        face = <RentFace card={card} w={w} h={h} size={size} />; break
+      default:
+        face = <ActionFace card={card} w={w} h={h} size={size} />
+    }
   }
+
+  if (shouldRotate) {
+    return <Box sx={{ transform: 'rotate(180deg)', width: w, height: h }}>{face}</Box>
+  }
+  return face
+}
+
+// ---------------------------------------------------------------------------
+// Image Face — renders a cropped card image within the standard card shell
+// ---------------------------------------------------------------------------
+
+function ImageFace({ src, alt, w, h, size }: { src: string; alt: string; w: number; h: number; size: number }): React.JSX.Element {
+  return (
+    <Box
+      sx={{
+        width: w,
+        height: h,
+        borderRadius: `${4 * size}px`,
+        boxShadow: `0 ${2 * size}px ${6 * size}px rgba(0,0,0,0.25)`,
+        overflow: 'hidden',
+        flexShrink: 0,
+        position: 'relative',
+      }}
+    >
+      <Box
+        component="img"
+        src={src}
+        alt={alt}
+        sx={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          display: 'block',
+        }}
+      />
+    </Box>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -72,9 +122,8 @@ function cardShell(w: number, h: number, bg: string, size: number): Record<strin
     width: w,
     height: h,
     borderRadius: `${4 * size}px`,
-    border: `${1 * size}px solid #333`,
     bgcolor: bg,
-    boxShadow: 1,
+    boxShadow: `0 ${2 * size}px ${6 * size}px rgba(0,0,0,0.25)`,
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',

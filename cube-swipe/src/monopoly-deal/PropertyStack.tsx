@@ -1,12 +1,14 @@
 import { Box } from '@mui/material'
 import { MonopolyCard } from './MonopolyCard'
-import { type MonopolyCardData } from './cardData'
+import { type MonopolyCardData, type PropertyColor } from './cardData'
 
 interface PropertyStackProps {
   /** Property cards in this stack (bottom to top) */
   cards: MonopolyCardData[]
   /** Optional building cards on top (House, Hotel) */
   buildings?: MonopolyCardData[]
+  /** Color of the group (for wild card rotation) */
+  groupColor?: PropertyColor
   size?: number
   onCardClick?: (cardId: string) => void
   highlightedCardIds?: string[]
@@ -16,6 +18,7 @@ interface PropertyStackProps {
 export function PropertyStack({
   cards,
   buildings = [],
+  groupColor,
   size = 1,
   onCardClick,
   highlightedCardIds,
@@ -49,7 +52,7 @@ export function PropertyStack({
               transition: 'outline 0.15s ease',
             }}
           >
-            <MonopolyCard card={card} size={size} />
+            <MonopolyCard card={card} size={size} groupColor={groupColor} />
           </Box>
         )
       })}

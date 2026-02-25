@@ -1,4 +1,4 @@
-import { Box } from '@mui/material'
+import { Box, Typography } from '@mui/material'
 import { MonopolyCard } from './MonopolyCard'
 import { PropertyStack } from './PropertyStack'
 import { type MonopolyCardData } from './cardData'
@@ -41,6 +41,21 @@ function getGroupColor(group: PropertyGroup | GamePropertyGroup): PropertyColor 
   return undefined
 }
 
+/** Group money cards by denomination, returning one representative card + count per value. */
+function groupMoneyByValue(cards: MonopolyCardData[]): { representative: MonopolyCardData; count: number }[] {
+  const byValue = new Map<number, { representative: MonopolyCardData; count: number }>()
+  for (const card of cards) {
+    const existing = byValue.get(card.value)
+    if (existing) {
+      existing.count++
+    } else {
+      byValue.set(card.value, { representative: card, count: 1 })
+    }
+  }
+  // Sort by value ascending
+  return [...byValue.values()].sort((a, b) => a.representative.value - b.representative.value)
+}
+
 /** One player's played area — property stacks + money bank. */
 export function PlayerField({
   stacks,
@@ -67,10 +82,34 @@ export function PlayerField({
         ...(isOpponent && { transform: 'rotate(180deg)' }),
       }}
     >
-      {/* Money bank */}
-      {moneyCards.map((card) => (
-        <Box key={card.id} sx={{ flexShrink: 0 }}>
-          <MonopolyCard card={card} size={size} />
+      {/* Money bank — grouped by denomination */}
+      {groupMoneyByValue(moneyCards).map(({ representative, count }) => (
+        <Box key={representative.value} sx={{ flexShrink: 0, position: 'relative' }}>
+          <MonopolyCard card={representative} size={size} />
+          {count > 1 && (
+            <Typography
+              sx={{
+                position: 'absolute',
+                top: -4 * size,
+                right: -4 * size,
+                bgcolor: '#1976d2',
+                color: '#fff',
+                borderRadius: '50%',
+                width: 20 * size,
+                height: 20 * size,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 11 * size,
+                fontWeight: 700,
+                lineHeight: 1,
+                zIndex: 10,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+              }}
+            >
+              {count}
+            </Typography>
+          )}
         </Box>
       ))}
 
@@ -96,6 +135,7 @@ export function PlayerField({
             <PropertyStack
               cards={group.cards}
               buildings={group.buildings}
+              groupColor={color}
               size={size}
               onCardClick={selectionMode === 'card' && onCardClick && color
                 ? (cardId) => onCardClick(cardId, color)

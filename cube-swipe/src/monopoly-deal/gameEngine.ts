@@ -70,7 +70,9 @@ export type TurnPhase =
   | { type: 'awaitingDealBreakerTarget' }
   | { type: 'awaitingSlyDealTarget' }
   | { type: 'awaitingForcedDealSelect'; phase: 'give' | 'take'; givenCardId?: string }
+  | { type: 'awaitingDoubleRentConfirm'; rentCardId: string; doubleRentCardId: string }
   | { type: 'awaitingBuildingTarget'; cardId: string }
+  | { type: 'awaitingWildRelocation'; wildCardId: string; currentColor: PropertyColor }
   | { type: 'gameOver'; winner: PlayerId }
 
 export interface MonopolyDealState {
@@ -116,9 +118,13 @@ function addLog(state: MonopolyDealState, player: PlayerId, action: string): Mon
   }
 }
 
-function consumePlay(phase: TurnPhase, count: number = 1): TurnPhase {
-  if (phase.type !== 'play') return phase
-  return { type: 'play', playsRemaining: phase.playsRemaining - count }
+/** Consume a play using playsUsedThisTurn — works regardless of current phase type. */
+function consumePlayFromState(state: MonopolyDealState, count: number = 1): { turnPhase: TurnPhase; playsUsedThisTurn: number } {
+  const newPlaysUsed = state.playsUsedThisTurn + count
+  return {
+    turnPhase: { type: 'play' as const, playsRemaining: 3 - newPlaysUsed },
+    playsUsedThisTurn: newPlaysUsed,
+  }
 }
 
 /** Fisher-Yates shuffle (creates new array). */
@@ -223,11 +229,19 @@ export function canPlayCard(
   // Double Rent can only be played alongside a rent card (handled in UI)
   if (card.name === 'Double Rent') return { valid: false, reason: 'Must be played with a Rent card' }
 
+  // Building cards need at least one valid target set
+  if (card.type === 'building') {
+    const hasTarget = ps.field.some((g) => canPlaceBuilding(card, g))
+    if (!hasTarget) return { valid: false, reason: 'No complete set to build on' }
+  }
+
   return { valid: true }
 }
 
 export function canPlaceBuilding(card: MonopolyCardData, group: PropertyGroup): boolean {
   if (!isCompleteSet(group)) return false
+  // Buildings cannot be placed on Railroad or Utility sets
+  if (group.color === 'railroad' || group.color === 'utility') return false
   const hasHouse = group.buildings.some((b) => b.name === 'House')
   const hasHotel = group.buildings.some((b) => b.name === 'Hotel')
   if (card.name === 'House') return !hasHouse
@@ -314,7 +328,7 @@ export function playPropertyToField(
   }
 
   let s = setPlayer(state, p, newPs)
-  s = { ...s, turnPhase: consumePlay(s.turnPhase) }
+  s = { ...s, ...consumePlayFromState(state) }
   s = addLog(s, p, `Played ${card.name} to ${targetColor}`)
 
   // Check win
@@ -336,7 +350,7 @@ export function bankCard(state: MonopolyDealState, cardId: string): MonopolyDeal
   newPs = addToBank(newPs, card)
 
   let s = setPlayer(state, p, newPs)
-  s = { ...s, turnPhase: consumePlay(s.turnPhase) }
+  s = { ...s, ...consumePlayFromState(state) }
   s = addLog(s, p, `Banked ${card.name} (M${card.value}M)`)
   return s
 }
@@ -365,7 +379,7 @@ export function playBuilding(
   newPs = { ...newPs, field: newField }
 
   let s = setPlayer(state, p, newPs)
-  s = { ...s, turnPhase: consumePlay(s.turnPhase) }
+  s = { ...s, ...consumePlayFromState(state) }
   s = addLog(s, p, `Placed ${card.name} on ${targetColor}`)
   return s
 }
@@ -381,7 +395,7 @@ export function playPassGo(state: MonopolyDealState, cardId: string): MonopolyDe
   let s = setPlayer(state, p, newPs)
   s = { ...s, discardPile: [...s.discardPile, card] }
   s = drawCards(s, p, 2)
-  s = { ...s, turnPhase: consumePlay(s.turnPhase) }
+  s = { ...s, ...consumePlayFromState(state) }
   s = addLog(s, p, 'Played Pass Go — drew 2 cards')
   return s
 }
@@ -437,10 +451,17 @@ export function playRentCard(
 
   if (rentAmount <= 0) {
     // No rent to collect
-    s = { ...s, turnPhase: consumePlay(state.turnPhase, playCount) }
+    s = { ...s, ...consumePlayFromState(state, playCount) }
     s = addLog(s, p, `Played Rent for ${color} but owed M0`)
     return s
   }
+
+  s = { ...s, playsUsedThisTurn: state.playsUsedThisTurn + playCount }
+  s = addLog(s, p, `Charged M${rentAmount}M rent for ${color}${doubled ? ' (doubled!)' : ''}`)
+
+  // Offer JSN to defender
+  const jsnState = tryOfferJSN(s, rentCard, p, { targetColor: color, doubleRentCardId })
+  if (jsnState) return jsnState
 
   const debt: DebtInfo = {
     creditor: p,
@@ -449,14 +470,7 @@ export function playRentCard(
     source: 'rent',
     selectedPayment: [],
   }
-
-  s = {
-    ...s,
-    turnPhase: { type: 'awaitingPayment', debt },
-    playsUsedThisTurn: state.playsUsedThisTurn + playCount,
-  }
-  s = addLog(s, p, `Charged M${rentAmount}M rent for ${color}${doubled ? ' (doubled!)' : ''}`)
-  return s
+  return { ...s, turnPhase: { type: 'awaitingPayment', debt } }
 }
 
 /** Complete rent after color selection (for wild rent). */
@@ -482,6 +496,20 @@ export function completeRentColor(
     return addLog(s, p, `Played Wild Rent for ${color} but owed M0`)
   }
 
+  let s: MonopolyDealState = {
+    ...state,
+    playsUsedThisTurn: state.playsUsedThisTurn + playCount,
+  }
+  s = addLog(s, p, `Charged M${rentAmount}M rent for ${color}${doubled ? ' (doubled!)' : ''}`)
+
+  // Offer JSN to defender — rent card was already moved to discard in playRentCard
+  const rentCardId = (state.turnPhase as { cardId: string }).cardId
+  const rentCard = state.discardPile.find((c) => c.id === rentCardId)
+  if (rentCard) {
+    const jsnState = tryOfferJSN(s, rentCard, p, { targetColor: color, doubleRentCardId })
+    if (jsnState) return jsnState
+  }
+
   const debt: DebtInfo = {
     creditor: p,
     debtor: opponent(p),
@@ -489,14 +517,45 @@ export function completeRentColor(
     source: 'rent',
     selectedPayment: [],
   }
+  return { ...s, turnPhase: { type: 'awaitingPayment', debt } }
+}
 
-  let s: MonopolyDealState = {
-    ...state,
-    turnPhase: { type: 'awaitingPayment', debt },
-    playsUsedThisTurn: state.playsUsedThisTurn + playCount,
+// ---------------------------------------------------------------------------
+// JSN offer helper — check if defender has JSN before resolving action
+// ---------------------------------------------------------------------------
+
+/**
+ * Before resolving an action against the opponent, check if the defender
+ * has a Just Say No card and offer them a chance to block.
+ * If they do, transitions to awaitingJSN; otherwise returns null (proceed).
+ */
+function tryOfferJSN(
+  state: MonopolyDealState,
+  actionCard: MonopolyCardData,
+  sourcePlayer: PlayerId,
+  pendingOverrides?: Partial<PendingAction>,
+): MonopolyDealState | null {
+  const target = opponent(sourcePlayer)
+  const targetState = getPlayer(state, target)
+  const hasJSN = targetState.hand.some((c) => c.name === 'Just Say No')
+  if (!hasJSN) return null
+
+  const pending: PendingAction = {
+    actionCard,
+    sourcePlayer,
+    ...pendingOverrides,
   }
-  s = addLog(s, p, `Charged M${rentAmount}M rent for ${color}${doubled ? ' (doubled!)' : ''}`)
-  return s
+  return {
+    ...state,
+    turnPhase: {
+      type: 'awaitingJSN',
+      jsnChain: {
+        originalAction: pending,
+        chain: [],
+        currentDecider: target,
+      },
+    },
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -512,7 +571,12 @@ export function playDebtCollector(state: MonopolyDealState, cardId: string): Mon
 
   const newPs = removeFromHand(ps, cardId)
   let s = setPlayer(state, p, newPs)
-  s = { ...s, discardPile: [...s.discardPile, card] }
+  s = { ...s, discardPile: [...s.discardPile, card], playsUsedThisTurn: state.playsUsedThisTurn + 1 }
+  s = addLog(s, p, 'Played Debt Collector — opponent owes M5M')
+
+  // Offer JSN to defender
+  const jsnState = tryOfferJSN(s, card, p)
+  if (jsnState) return jsnState
 
   const debt: DebtInfo = {
     creditor: p,
@@ -521,14 +585,7 @@ export function playDebtCollector(state: MonopolyDealState, cardId: string): Mon
     source: 'debtCollector',
     selectedPayment: [],
   }
-
-  s = {
-    ...s,
-    turnPhase: { type: 'awaitingPayment', debt },
-    playsUsedThisTurn: state.playsUsedThisTurn + 1,
-  }
-  s = addLog(s, p, 'Played Debt Collector — opponent owes M5M')
-  return s
+  return { ...s, turnPhase: { type: 'awaitingPayment', debt } }
 }
 
 /** Play It's My Birthday — opponent owes M2. */
@@ -540,7 +597,12 @@ export function playBirthday(state: MonopolyDealState, cardId: string): Monopoly
 
   const newPs = removeFromHand(ps, cardId)
   let s = setPlayer(state, p, newPs)
-  s = { ...s, discardPile: [...s.discardPile, card] }
+  s = { ...s, discardPile: [...s.discardPile, card], playsUsedThisTurn: state.playsUsedThisTurn + 1 }
+  s = addLog(s, p, "Played It's My Birthday — opponent owes M2M")
+
+  // Offer JSN to defender
+  const jsnState = tryOfferJSN(s, card, p)
+  if (jsnState) return jsnState
 
   const debt: DebtInfo = {
     creditor: p,
@@ -549,14 +611,7 @@ export function playBirthday(state: MonopolyDealState, cardId: string): Monopoly
     source: 'birthday',
     selectedPayment: [],
   }
-
-  s = {
-    ...s,
-    turnPhase: { type: 'awaitingPayment', debt },
-    playsUsedThisTurn: state.playsUsedThisTurn + 1,
-  }
-  s = addLog(s, p, "Played It's My Birthday — opponent owes M2M")
-  return s
+  return { ...s, turnPhase: { type: 'awaitingPayment', debt } }
 }
 
 // ---------------------------------------------------------------------------
@@ -587,8 +642,16 @@ export function getPayableCards(ps: PlayerState): MonopolyCardData[] {
 
 /** Get total value of selected payment cards. */
 export function getSelectedPaymentValue(ps: PlayerState, selectedIds: string[]): number {
-  const payable = getPayableCards(ps)
-  return payable.filter((c) => selectedIds.includes(c.id)).reduce((sum, c) => sum + c.value, 0)
+  if (selectedIds.length === 0) return 0
+  const selected = new Set(selectedIds)
+  let total = 0
+  for (const card of getPayableCards(ps)) {
+    if (!selected.has(card.id)) continue
+    total += card.value
+    selected.delete(card.id)
+    if (selected.size === 0) break
+  }
+  return total
 }
 
 /** Confirm payment: transfer cards from debtor to creditor. */
@@ -616,49 +679,83 @@ export function confirmPayment(state: MonopolyDealState): MonopolyDealState {
     return state // Not enough selected
   }
 
-  // Transfer cards
-  let newDebtor = { ...debtorState }
-  let newCreditor = { ...creditorState }
+  const selected = new Set(selectedPayment)
+  const transferToBank: MonopolyCardData[] = []
+  const transferToField: Array<{ card: MonopolyCardData; color: PropertyColor }> = []
 
-  for (const cardId of selectedPayment) {
-    // Check bank
-    const bankIdx = newDebtor.bank.findIndex((c) => c.id === cardId)
-    if (bankIdx >= 0) {
-      const card = newDebtor.bank[bankIdx]
-      newDebtor = { ...newDebtor, bank: newDebtor.bank.filter((c) => c.id !== cardId) }
-      newCreditor = addToBank(newCreditor, card)
-      continue
+  const nextDebtorBank: MonopolyCardData[] = []
+  for (const card of debtorState.bank) {
+    if (selected.has(card.id)) {
+      selected.delete(card.id)
+      transferToBank.push(card)
+    } else {
+      nextDebtorBank.push(card)
     }
+  }
 
-    // Check field (properties + buildings)
-    for (let gi = 0; gi < newDebtor.field.length; gi++) {
-      const group = newDebtor.field[gi]
-      const propIdx = group.cards.findIndex((c) => c.id === cardId)
-      if (propIdx >= 0) {
-        const card = group.cards[propIdx]
-        const newField = [...newDebtor.field]
-        newField[gi] = { ...group, cards: group.cards.filter((c) => c.id !== cardId) }
-        // Remove empty groups
-        newDebtor = { ...newDebtor, field: newField.filter((g) => g.cards.length > 0 || g.buildings.length > 0) }
-        // Properties go to creditor's field
-        newCreditor = addPropertyToField(newCreditor, card, group.color)
-        break
-      }
-      const buildIdx = group.buildings.findIndex((c) => c.id === cardId)
-      if (buildIdx >= 0) {
-        const card = group.buildings[buildIdx]
-        const newField = [...newDebtor.field]
-        newField[gi] = { ...group, buildings: group.buildings.filter((c) => c.id !== cardId) }
-        newDebtor = { ...newDebtor, field: newField }
-        // Buildings go to creditor's bank as money
-        newCreditor = addToBank(newCreditor, card)
-        break
+  const nextDebtorField: PropertyGroup[] = []
+  for (const group of debtorState.field) {
+    const remainingCards: MonopolyCardData[] = []
+    for (const card of group.cards) {
+      if (selected.has(card.id)) {
+        selected.delete(card.id)
+        transferToField.push({ card, color: group.color })
+      } else {
+        remainingCards.push(card)
       }
     }
+
+    const remainingBuildings: MonopolyCardData[] = []
+    for (const building of group.buildings) {
+      if (selected.has(building.id)) {
+        selected.delete(building.id)
+        transferToBank.push(building)
+      } else {
+        remainingBuildings.push(building)
+      }
+    }
+
+    if (remainingCards.length > 0) {
+      // If set was complete before but no longer — orphan buildings to bank
+      const wasComplete = group.cards.length >= SET_SIZE[group.color]
+      const stillComplete = remainingCards.length >= SET_SIZE[group.color]
+      if (wasComplete && !stillComplete && remainingBuildings.length > 0) {
+        nextDebtorBank.push(...remainingBuildings)
+        nextDebtorField.push({ ...group, cards: remainingCards, buildings: [] })
+      } else {
+        nextDebtorField.push({ ...group, cards: remainingCards, buildings: remainingBuildings })
+      }
+    } else if (remainingBuildings.length > 0) {
+      // No property cards left — buildings become orphaned, move to bank
+      nextDebtorBank.push(...remainingBuildings)
+    }
+    // else: group completely empty, drop it
+  }
+
+  const newDebtor: PlayerState = {
+    ...debtorState,
+    bank: nextDebtorBank,
+    field: nextDebtorField,
+  }
+
+  let newCreditor: PlayerState = {
+    ...creditorState,
+    bank: [...creditorState.bank, ...transferToBank],
+  }
+  for (const { card, color } of transferToField) {
+    newCreditor = addPropertyToField(newCreditor, card, color)
   }
 
   let s = setPlayer(state, debtor, newDebtor)
   s = setPlayer(s, creditor, newCreditor)
+
+  // Check if creditor won via transferred properties
+  const winner = checkWinCondition(s)
+  if (winner) {
+    s = { ...s, turnPhase: { type: 'gameOver', winner } }
+    s = addLog(s, debtor, `Paid M${paymentValue}M (owed M${amount}M)`)
+    return s
+  }
 
   const remaining = 3 - s.playsUsedThisTurn
   s = { ...s, turnPhase: { type: 'play', playsRemaining: remaining } }
@@ -684,7 +781,7 @@ function addPropertyToField(ps: PlayerState, card: MonopolyCardData, color: Prop
 // Steal / Swap actions
 // ---------------------------------------------------------------------------
 
-/** Play Sly Deal — transition to target selection. */
+/** Play Sly Deal — transition to target selection (or JSN offer). */
 export function playSlyDeal(state: MonopolyDealState, cardId: string): MonopolyDealState {
   const p = state.currentTurn
   const ps = getPlayer(state, p)
@@ -697,8 +794,13 @@ export function playSlyDeal(state: MonopolyDealState, cardId: string): MonopolyD
   const newPs = removeFromHand(ps, cardId)
   let s = setPlayer(state, p, newPs)
   s = { ...s, discardPile: [...s.discardPile, card], playsUsedThisTurn: state.playsUsedThisTurn + 1 }
-  s = { ...s, turnPhase: { type: 'awaitingSlyDealTarget' } }
-  return s
+  s = addLog(s, p, 'Played Sly Deal')
+
+  // Offer JSN to defender
+  const jsnState = tryOfferJSN(s, card, p)
+  if (jsnState) return jsnState
+
+  return { ...s, turnPhase: { type: 'awaitingSlyDealTarget' } }
 }
 
 /** Complete Sly Deal — steal a specific property. */
@@ -711,6 +813,7 @@ export function completeSlyDeal(state: MonopolyDealState, targetCardId: string):
   let stolenCard: MonopolyCardData | null = null
   let stolenColor: PropertyColor | null = null
   let newOppField = [...oppState.field]
+  const orphanedBuildings: MonopolyCardData[] = []
 
   for (let gi = 0; gi < newOppField.length; gi++) {
     const group = newOppField[gi]
@@ -719,15 +822,21 @@ export function completeSlyDeal(state: MonopolyDealState, targetCardId: string):
     if (idx >= 0) {
       stolenCard = group.cards[idx]
       stolenColor = group.color
-      newOppField[gi] = { ...group, cards: group.cards.filter((c) => c.id !== targetCardId) }
-      newOppField = newOppField.filter((g) => g.cards.length > 0)
+      const remainingCards = group.cards.filter((c) => c.id !== targetCardId)
+      if (remainingCards.length === 0) {
+        // Group is now empty — move buildings to opponent's bank
+        orphanedBuildings.push(...group.buildings)
+        newOppField = newOppField.filter((_, i) => i !== gi)
+      } else {
+        newOppField[gi] = { ...group, cards: remainingCards }
+      }
       break
     }
   }
 
   if (!stolenCard || !stolenColor) return state
 
-  const newOpp = { ...oppState, field: newOppField }
+  const newOpp = { ...oppState, field: newOppField, bank: [...oppState.bank, ...orphanedBuildings] }
   let s = setPlayer(state, opp, newOpp)
 
   const myState = getPlayer(s, p)
@@ -743,18 +852,27 @@ export function completeSlyDeal(state: MonopolyDealState, targetCardId: string):
   return s
 }
 
-/** Play Forced Deal — transition to swap selection. */
+/** Play Forced Deal — transition to swap selection (or JSN offer). */
 export function playForcedDeal(state: MonopolyDealState, cardId: string): MonopolyDealState {
   const p = state.currentTurn
   const ps = getPlayer(state, p)
   const card = ps.hand.find((c) => c.id === cardId)
   if (!card) return state
 
+  const myStealable = getStealableProperties(ps)
+  const oppStealable = getStealableProperties(getPlayer(state, opponent(p)))
+  if (myStealable.length === 0 || oppStealable.length === 0) return state
+
   const newPs = removeFromHand(ps, cardId)
   let s = setPlayer(state, p, newPs)
   s = { ...s, discardPile: [...s.discardPile, card], playsUsedThisTurn: state.playsUsedThisTurn + 1 }
-  s = { ...s, turnPhase: { type: 'awaitingForcedDealSelect', phase: 'give' } }
-  return s
+  s = addLog(s, p, 'Played Forced Deal')
+
+  // Offer JSN to defender
+  const jsnState = tryOfferJSN(s, card, p)
+  if (jsnState) return jsnState
+
+  return { ...s, turnPhase: { type: 'awaitingForcedDealSelect', phase: 'give' } }
 }
 
 /** Complete Forced Deal — swap your property for opponent's. */
@@ -773,6 +891,7 @@ export function completeForcedDeal(
   let yourCard: MonopolyCardData | null = null
   let yourColor: PropertyColor | null = null
   for (const group of myState.field) {
+    if (isCompleteSet(group)) continue
     const idx = group.cards.findIndex((c) => c.id === yourCardId)
     if (idx >= 0) {
       yourCard = group.cards[idx]
@@ -824,7 +943,46 @@ function removeCardFromField(ps: PlayerState, cardId: string): PlayerState {
   return { ...ps, field: newField }
 }
 
-/** Play Deal Breaker — transition to set selection. */
+function addGroupToField(ps: PlayerState, group: PropertyGroup): PlayerState {
+  const idx = ps.field.findIndex((g) => g.color === group.color)
+  if (idx < 0) {
+    return {
+      ...ps,
+      field: [
+        ...ps.field,
+        {
+          ...group,
+          cards: [...group.cards],
+          buildings: [...group.buildings],
+        },
+      ],
+    }
+  }
+
+  const existing = ps.field[idx]
+  // Merge buildings, but enforce max 1 House + 1 Hotel (no duplicates)
+  const allBuildings = [...existing.buildings, ...group.buildings]
+  const mergedBuildings: MonopolyCardData[] = []
+  const excessBuildings: MonopolyCardData[] = []
+  let hasHouse = false
+  let hasHotel = false
+  for (const b of allBuildings) {
+    if (b.name === 'House' && !hasHouse) { mergedBuildings.push(b); hasHouse = true }
+    else if (b.name === 'Hotel' && !hasHotel) { mergedBuildings.push(b); hasHotel = true }
+    else excessBuildings.push(b)
+  }
+
+  const newField = [...ps.field]
+  newField[idx] = {
+    ...existing,
+    cards: [...existing.cards, ...group.cards],
+    buildings: mergedBuildings,
+  }
+  // Excess duplicate buildings go to bank
+  return { ...ps, field: newField, bank: [...ps.bank, ...excessBuildings] }
+}
+
+/** Play Deal Breaker — transition to set selection (or JSN offer). */
 export function playDealBreaker(state: MonopolyDealState, cardId: string): MonopolyDealState {
   const p = state.currentTurn
   const ps = getPlayer(state, p)
@@ -837,8 +995,13 @@ export function playDealBreaker(state: MonopolyDealState, cardId: string): Monop
   const newPs = removeFromHand(ps, cardId)
   let s = setPlayer(state, p, newPs)
   s = { ...s, discardPile: [...s.discardPile, card], playsUsedThisTurn: state.playsUsedThisTurn + 1 }
-  s = { ...s, turnPhase: { type: 'awaitingDealBreakerTarget' } }
-  return s
+  s = addLog(s, p, 'Played Deal Breaker!')
+
+  // Offer JSN to defender
+  const jsnState = tryOfferJSN(s, card, p)
+  if (jsnState) return jsnState
+
+  return { ...s, turnPhase: { type: 'awaitingDealBreakerTarget' } }
 }
 
 /** Complete Deal Breaker — steal a complete set. */
@@ -855,8 +1018,8 @@ export function completeDealBreaker(state: MonopolyDealState, targetColor: Prope
   oppState = { ...oppState, field: newOppField }
 
   let myState = getPlayer(state, p)
-  // Add the stolen group (all cards + buildings) to our field
-  myState = { ...myState, field: [...myState.field, { ...stolenGroup }] }
+  // Add the stolen group (all cards + buildings) to our field, merging same-color groups.
+  myState = addGroupToField(myState, stolenGroup)
 
   let s = setPlayer(state, p, myState)
   s = setPlayer(s, opp, oppState)
@@ -1041,6 +1204,77 @@ function switchTurn(state: MonopolyDealState): MonopolyDealState {
     turnNumber: state.turnNumber + 1,
     playsUsedThisTurn: 0,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Wild Card Relocation (free action — does not consume a play)
+// ---------------------------------------------------------------------------
+
+/** Move a wild card from one color group to another on the current player's field. */
+export function relocateWildOnField(
+  state: MonopolyDealState,
+  wildCardId: string,
+  newColor: PropertyColor,
+): MonopolyDealState {
+  const p = state.currentTurn
+  const ps = getPlayer(state, p)
+
+  // Find the wild card in the player's field
+  let foundCard: MonopolyCardData | null = null
+  let sourceGroupIdx = -1
+  for (let i = 0; i < ps.field.length; i++) {
+    const card = ps.field[i].cards.find((c) => c.id === wildCardId)
+    if (card && card.type === 'wild') {
+      foundCard = card
+      sourceGroupIdx = i
+      break
+    }
+  }
+  if (!foundCard || sourceGroupIdx < 0) return state
+
+  const sourceGroup = ps.field[sourceGroupIdx]
+  // Don't allow moving from a complete set
+  if (isCompleteSet(sourceGroup)) return state
+  // No-op if same color
+  if (sourceGroup.color === newColor) return state
+
+  // Remove wild from source group
+  let newField = [...ps.field]
+  const newSourceCards = sourceGroup.cards.filter((c) => c.id !== wildCardId)
+  if (newSourceCards.length === 0) {
+    // Remove empty group (drop any orphaned buildings to bank)
+    const orphanedBuildings = sourceGroup.buildings
+    newField = newField.filter((_, i) => i !== sourceGroupIdx)
+    const newPs = { ...ps, field: newField, bank: [...ps.bank, ...orphanedBuildings] }
+    // Add to target group
+    const result = addPropertyToField(newPs, foundCard, newColor)
+    let s = setPlayer(state, p, result)
+    s = addLog(s, p, `Moved ${foundCard.name} from ${sourceGroup.color} to ${newColor}`)
+    return s
+  }
+
+  newField[sourceGroupIdx] = { ...sourceGroup, cards: newSourceCards }
+  const newPs = { ...ps, field: newField }
+  // Add to target group
+  const result = addPropertyToField(newPs, foundCard, newColor)
+  let s = setPlayer(state, p, result)
+  s = addLog(s, p, `Moved ${foundCard.name} from ${sourceGroup.color} to ${newColor}`)
+  return s
+}
+
+/** Get wild cards on a player's field that can be relocated (not in complete sets). */
+export function getRelocatableWilds(state: MonopolyDealState, playerId: PlayerId): { cardId: string; currentColor: PropertyColor }[] {
+  const ps = getPlayer(state, playerId)
+  const result: { cardId: string; currentColor: PropertyColor }[] = []
+  for (const group of ps.field) {
+    if (isCompleteSet(group)) continue
+    for (const card of group.cards) {
+      if (card.type === 'wild') {
+        result.push({ cardId: card.id, currentColor: group.color })
+      }
+    }
+  }
+  return result
 }
 
 // ---------------------------------------------------------------------------

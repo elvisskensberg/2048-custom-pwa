@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   Box, Typography, Divider, Button, Dialog, DialogTitle,
   DialogContent, DialogActions, Chip, LinearProgress,
@@ -50,6 +51,7 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
     startNewGame,
     resumeGame,
     playCard,
+    bankCardFromHand,
     selectWildColor,
     selectRentColor,
     selectTarget,
@@ -60,9 +62,19 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
     confirmDebtPayment,
     respondJSN,
     acceptIncomingAction,
+    cancelAction,
+    confirmDoubleRent,
+    skipDoubleRent,
+    initiateWildRelocation,
+    completeWildRelocation,
+    relocatableWilds,
     discardCard,
     endTurn,
   } = game
+
+  const [bankMode, setBankMode] = useState(false)
+  // Effective bank mode — only active during player's play phase
+  const isBankMode = bankMode && turnPhase.type === 'play' && currentTurn === 'player'
 
   // ── Loading ──
   if (isLoading) {
@@ -130,6 +142,12 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
     }
   }
 
+  // During play phase, highlight relocatable wilds so player knows they can click them
+  if (turnPhase.type === 'play' && currentTurn === 'player' && relocatableWilds.length > 0) {
+    plHighCards = relocatableWilds.map((w) => w.cardId)
+    plSelMode = 'card'
+  }
+
   // ── Status text ──
   const statusText = getStatusText(winner, isAIThinking, currentTurn, turnPhase)
 
@@ -144,6 +162,23 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
     }
   }
 
+  // ── Wild relocation color choices ──
+  const wildRelocationColors: PropertyColor[] = []
+  if (turnPhase.type === 'awaitingWildRelocation') {
+    const card = gameState.player.field.flatMap((g) => g.cards).find((c) => c.id === turnPhase.wildCardId)
+    if (card) {
+      if (card.color && card.color2) {
+        // Dual-color wild: can only be placed in its two colors
+        if (card.color !== turnPhase.currentColor) wildRelocationColors.push(card.color)
+        if (card.color2 !== turnPhase.currentColor) wildRelocationColors.push(card.color2)
+      } else {
+        // Rainbow wild: any color
+        const allColors: PropertyColor[] = ['brown', 'lightBlue', 'pink', 'orange', 'red', 'yellow', 'green', 'darkBlue', 'railroad', 'utility']
+        wildRelocationColors.push(...allColors.filter((c) => c !== turnPhase.currentColor))
+      }
+    }
+  }
+
   return (
     <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', position: 'relative' }}>
       <BackButton onClick={onBack} />
@@ -154,7 +189,12 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
           <Typography variant="body2" sx={{ fontWeight: 600, color: winner ? 'success.main' : 'text.primary' }}>
             {statusText}
           </Typography>
-          <Chip label={`Turn ${gameState.turnNumber}`} size="small" variant="outlined" />
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            {currentTurn === 'player' && turnPhase.type === 'play' && (
+              <Chip label={`${3 - turnPhase.playsRemaining}/3`} size="small" color="primary" />
+            )}
+            <Chip label={`Turn ${gameState.turnNumber}`} size="small" variant="outlined" />
+          </Box>
         </Box>
         {isAIThinking && <LinearProgress sx={{ mx: 2, mb: 1 }} />}
 
@@ -196,7 +236,11 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
             stacks={playerField}
             moneyCards={playerBank}
             onCardClick={(cardId) => {
-              if (turnPhase.type === 'awaitingForcedDealSelect' && turnPhase.phase === 'give') selectForcedDealGive(cardId)
+              if (turnPhase.type === 'awaitingForcedDealSelect' && turnPhase.phase === 'give') {
+                selectForcedDealGive(cardId)
+              } else if (turnPhase.type === 'play' && currentTurn === 'player' && relocatableWilds.some((w) => w.cardId === cardId)) {
+                initiateWildRelocation(cardId)
+              }
             }}
             highlightedCards={plHighCards}
             selectionMode={plSelMode}
@@ -206,6 +250,14 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
         {/* Action bar */}
         {currentTurn === 'player' && turnPhase.type === 'play' && (
           <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, py: 1, px: 2 }}>
+            <Button
+              variant={bankMode ? 'contained' : 'outlined'}
+              size="small"
+              color={bankMode ? 'success' : 'primary'}
+              onClick={() => setBankMode(!bankMode)}
+            >
+              {bankMode ? 'Bank Mode ON' : 'Bank as Money'}
+            </Button>
             <Button variant="outlined" size="small" onClick={endTurn}>End Turn</Button>
           </Box>
         )}
@@ -222,10 +274,17 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
             turnPhase.type === 'discard'
               ? (cardId) => discardCard(cardId)
               : turnPhase.type === 'play' && currentTurn === 'player'
-                ? (cardId) => playCard(cardId)
+                ? (cardId) => {
+                    if (isBankMode) {
+                      bankCardFromHand(cardId)
+                      setBankMode(false)
+                    } else {
+                      playCard(cardId)
+                    }
+                  }
                 : undefined
           }
-          playableCardIds={turnPhase.type === 'play' ? playableCardIds : undefined}
+          playableCardIds={turnPhase.type === 'play' ? (isBankMode ? undefined : playableCardIds) : undefined}
         />
 
         <AppVersion />
@@ -238,6 +297,7 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
         title="Choose Color"
         colors={turnPhase.type === 'awaitingWildColor' ? getWildColors(gameState, turnPhase.cardId) : []}
         onSelect={selectWildColor}
+        onCancel={cancelAction}
       />
 
       <ColorPickerDialog
@@ -245,13 +305,42 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
         title="Charge Rent for..."
         colors={turnPhase.type === 'awaitingRentColor' ? getRentColors(gameState, turnPhase.cardId) : []}
         onSelect={selectRentColor}
+        onCancel={cancelAction}
       />
+
+      <Dialog open={turnPhase.type === 'awaitingDoubleRentConfirm' && currentTurn === 'player'}>
+        <DialogTitle>Double Rent?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Combine with Double Rent to charge 2x? (uses 2 plays)
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelAction}>Cancel</Button>
+          <Button onClick={skipDoubleRent}>No, regular rent</Button>
+          <Button variant="contained" color="error" onClick={confirmDoubleRent}>Double It!</Button>
+        </DialogActions>
+      </Dialog>
 
       <ColorPickerDialog
         open={turnPhase.type === 'awaitingBuildingTarget' && currentTurn === 'player'}
         title="Build on which set?"
         colors={buildableColors}
         onSelect={selectBuildingTarget}
+        onCancel={cancelAction}
+        onBank={() => {
+          if (turnPhase.type === 'awaitingBuildingTarget') {
+            bankCardFromHand(turnPhase.cardId)
+          }
+        }}
+      />
+
+      <ColorPickerDialog
+        open={turnPhase.type === 'awaitingWildRelocation' && currentTurn === 'player'}
+        title="Move Wild to which color?"
+        colors={wildRelocationColors}
+        onSelect={completeWildRelocation}
+        onCancel={cancelAction}
       />
 
       <PaymentDialog
@@ -264,6 +353,7 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
 
       <JSNDialog
         open={turnPhase.type === 'awaitingJSN' && !isAIThinking && (turnPhase.jsnChain.currentDecider === 'player')}
+        actionName={turnPhase.type === 'awaitingJSN' ? turnPhase.jsnChain.originalAction.actionCard.name : ''}
         hasJSN={playerHand.some((c) => c.name === 'Just Say No')}
         onUseJSN={() => {
           const jsn = playerHand.find((c) => c.name === 'Just Say No')
@@ -295,33 +385,45 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
 // ---------------------------------------------------------------------------
 
 function ColorPickerDialog({
-  open, title, colors, onSelect,
+  open, title, colors, onSelect, onCancel, onBank,
 }: {
-  open: boolean; title: string; colors: PropertyColor[]; onSelect: (c: PropertyColor) => void
+  open: boolean; title: string; colors: PropertyColor[]; onSelect: (c: PropertyColor) => void; onCancel?: () => void; onBank?: () => void
 }): React.JSX.Element {
   return (
     <Dialog open={open} maxWidth="xs" fullWidth>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'center' }}>
-          {colors.map((color) => (
-            <Button
-              key={color}
-              variant="contained"
-              onClick={() => onSelect(color)}
-              sx={{
-                bgcolor: COLOR_HEX[color],
-                color: isLight(COLOR_HEX[color]) ? '#000' : '#fff',
-                '&:hover': { bgcolor: COLOR_HEX[color], opacity: 0.85 },
-                minWidth: 100,
-                fontWeight: 700,
-              }}
-            >
-              {COLOR_LABEL[color]}
-            </Button>
-          ))}
-        </Box>
+        {colors.length === 0 ? (
+          <Typography variant="body2" sx={{ textAlign: 'center', color: 'text.secondary', py: 2 }}>
+            No valid options available.
+          </Typography>
+        ) : (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'center' }}>
+            {colors.map((color) => (
+              <Button
+                key={color}
+                variant="contained"
+                onClick={() => onSelect(color)}
+                sx={{
+                  bgcolor: COLOR_HEX[color],
+                  color: isLight(COLOR_HEX[color]) ? '#000' : '#fff',
+                  '&:hover': { bgcolor: COLOR_HEX[color], opacity: 0.85 },
+                  minWidth: 100,
+                  fontWeight: 700,
+                }}
+              >
+                {COLOR_LABEL[color]}
+              </Button>
+            ))}
+          </Box>
+        )}
       </DialogContent>
+      {(onCancel || onBank) && (
+        <DialogActions>
+          {onBank && <Button onClick={onBank} color="success">Bank as Money</Button>}
+          {onCancel && <Button onClick={onCancel}>Cancel</Button>}
+        </DialogActions>
+      )}
     </Dialog>
   )
 }
@@ -379,18 +481,18 @@ function PaymentDialog({
 }
 
 function JSNDialog({
-  open, hasJSN, onUseJSN, onAccept,
+  open, actionName, hasJSN, onUseJSN, onAccept,
 }: {
-  open: boolean; hasJSN: boolean; onUseJSN: () => void; onAccept: () => void
+  open: boolean; actionName: string; hasJSN: boolean; onUseJSN: () => void; onAccept: () => void
 }): React.JSX.Element {
   return (
     <Dialog open={open}>
-      <DialogTitle>Action played against you!</DialogTitle>
+      <DialogTitle>AI played {actionName}!</DialogTitle>
       <DialogContent>
         <Typography>
           {hasJSN
-            ? 'You have a Just Say No card. Block this action?'
-            : "You don't have a Just Say No card."}
+            ? `Block ${actionName} with Just Say No?`
+            : `You don't have a Just Say No card. You must accept the ${actionName}.`}
         </Typography>
       </DialogContent>
       <DialogActions>
@@ -426,7 +528,7 @@ function getStatusText(
   if (currentTurn !== 'player') return "AI's turn"
   switch (turnPhase.type) {
     case 'draw': return 'Draw phase'
-    case 'play': return `Your turn — ${turnPhase.playsRemaining} play(s) left`
+    case 'play': return `Your turn — ${3 - (turnPhase.playsRemaining ?? 0)}/3 plays used`
     case 'discard': return `Discard ${turnPhase.mustDiscard} card(s)`
     case 'awaitingPayment': return `Pay M${turnPhase.debt?.amount}M`
     case 'awaitingJSN': return 'Play Just Say No?'
@@ -435,7 +537,9 @@ function getStatusText(
     case 'awaitingDealBreakerTarget': return 'Choose a set to steal'
     case 'awaitingSlyDealTarget': return 'Choose a property to steal'
     case 'awaitingForcedDealSelect': return turnPhase.phase === 'give' ? 'Choose your property to give' : 'Choose their property to take'
+    case 'awaitingDoubleRentConfirm': return 'Use Double Rent?'
     case 'awaitingBuildingTarget': return 'Choose a set to build on'
+    case 'awaitingWildRelocation': return 'Move wild card to which color?'
     default: return ''
   }
 }
