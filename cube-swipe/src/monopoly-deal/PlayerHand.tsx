@@ -21,17 +21,23 @@ export function PlayerHand({
   return (
     <Box
       sx={{
-        display: 'flex',
-        flexDirection: 'row',
-        gap: 0.8,
         overflowX: 'auto',
         px: 2,
         py: 1,
-        justifyContent: cards.length <= 5 ? 'center' : 'flex-start',
         '&::-webkit-scrollbar': { display: 'none' },
         scrollbarWidth: 'none',
       }}
     >
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'row',
+          gap: 0.8,
+          justifyContent: 'center',
+          width: 'fit-content',
+          minWidth: '100%',
+        }}
+      >
       {cards.map((card) => {
         const isSelected = selectedCardId === card.id
         const isPlayable = !playableCardIds || playableCardIds.includes(card.id)
@@ -53,6 +59,7 @@ export function PlayerHand({
           </Box>
         )
       })}
+      </Box>
     </Box>
   )
 }

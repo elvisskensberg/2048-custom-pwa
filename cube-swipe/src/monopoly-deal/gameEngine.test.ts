@@ -38,6 +38,10 @@ import {
   serializeState,
   deserializeState,
   shuffleDeck,
+  relocateWildOnField,
+  getRelocatableWilds,
+  getRelocatableBuildings,
+  relocateBuildingOnField,
   type MonopolyDealState,
   type PlayerState,
   type PropertyGroup,
@@ -48,6 +52,7 @@ import {
   ACTION_CARDS,
   MONEY_CARDS,
   BUILDING_CARDS,
+  WILD_CARDS,
   SET_SIZE,
 } from './cardData'
 
@@ -91,6 +96,58 @@ function makeGroup(color: MonopolyCardData['color'], cardIds: string[]): Propert
     cards: cardIds.map((id) => findCardById(id)),
     buildings: [],
   }
+}
+
+function getStateCardIds(state: MonopolyDealState): string[] {
+  const ids: string[] = []
+  const addCards = (cards: MonopolyCardData[]): void => {
+    for (const card of cards) ids.push(card.id)
+  }
+  const addPlayer = (player: PlayerState): void => {
+    addCards(player.hand)
+    addCards(player.bank)
+    for (const group of player.field) {
+      addCards(group.cards)
+      addCards(group.buildings)
+    }
+  }
+
+  addCards(state.drawPile)
+  addCards(state.discardPile)
+  addPlayer(state.player)
+  addPlayer(state.ai)
+  return ids
+}
+
+function expectNoDuplicateCardIds(state: MonopolyDealState): void {
+  const ids = getStateCardIds(state)
+  expect(new Set(ids).size).toBe(ids.length)
+}
+
+function expectCardConservation(before: MonopolyDealState, after: MonopolyDealState): void {
+  const beforeIds = getStateCardIds(before).sort()
+  const afterIds = getStateCardIds(after).sort()
+  expect(afterIds).toEqual(beforeIds)
+}
+
+function createSeededRandom(seed: number): () => number {
+  let s = seed >>> 0
+  return (): number => {
+    s = (s * 1664525 + 1013904223) >>> 0
+    return s / 0x100000000
+  }
+}
+
+function pickUnique<T>(items: T[], count: number, random: () => number): T[] {
+  const pool = [...items]
+  const target = Math.min(count, pool.length)
+  const result: T[] = []
+  for (let i = 0; i < target; i++) {
+    const idx = Math.floor(random() * pool.length)
+    result.push(pool[idx])
+    pool.splice(idx, 1)
+  }
+  return result
 }
 
 // ---------------------------------------------------------------------------
@@ -151,11 +208,11 @@ describe('gameEngine', () => {
       const state = makeState({
         turnPhase: { type: 'draw' },
         drawPile: [findCard('Mediterranean Ave'), findCard('Baltic Ave'), findCard('Park Place')],
-        player: { hand: [], field: [], bank: [] },
+        player: { hand: [findCard('Kentucky Ave')], field: [], bank: [] },
       })
 
       const next = executeDraw(state)
-      expect(next.player.hand).toHaveLength(2)
+      expect(next.player.hand).toHaveLength(3) // 1 existing + 2 drawn
       expect(next.drawPile).toHaveLength(1)
       expect(next.turnPhase).toEqual({ type: 'play', playsRemaining: 3 })
       expect(next.playsUsedThisTurn).toBe(0)
@@ -165,6 +222,7 @@ describe('gameEngine', () => {
       const state = makeState({
         turnPhase: { type: 'draw' },
         drawPile: [findCard('Mediterranean Ave'), findCard('Baltic Ave')],
+        player: { hand: [findCard('Kentucky Ave')], field: [], bank: [] },
       })
       const next = executeDraw(state)
       expect(next.log).toHaveLength(1)
@@ -359,6 +417,8 @@ describe('gameEngine', () => {
       expect(next.player.field).toHaveLength(1)
       expect(next.player.field[0].color).toBe('brown')
       expect(next.player.field[0].cards).toHaveLength(1)
+      expectCardConservation(state, next)
+      expectNoDuplicateCardIds(next)
     })
 
     it('adds to an existing group', () => {
@@ -414,7 +474,7 @@ describe('gameEngine', () => {
         player: { hand: [], field: [], bank: [] },
       })
       const next = playPropertyToField(state, 'nonexistent', 'brown')
-      expect(next).toBe(state)
+      expect(next).toEqual(state)
     })
   })
 
@@ -429,6 +489,8 @@ describe('gameEngine', () => {
       expect(next.player.hand).toHaveLength(0)
       expect(next.player.bank).toHaveLength(1)
       expect(next.player.bank[0].id).toBe(card.id)
+      expectCardConservation(state, next)
+      expectNoDuplicateCardIds(next)
     })
 
     it('consumes a play', () => {
@@ -472,7 +534,7 @@ describe('gameEngine', () => {
       })
 
       const next = playBuilding(state, house.id, 'red')
-      expect(next).toBe(state) // unchanged
+      expect(next).toEqual(state)
     })
   })
 
@@ -490,6 +552,8 @@ describe('gameEngine', () => {
       expect(next.discardPile).toHaveLength(1) // Pass Go discarded
       expect(next.discardPile[0].name).toBe('Pass Go')
       expect(next.drawPile).toHaveLength(1) // 3 - 2 drawn
+      expectCardConservation(state, next)
+      expectNoDuplicateCardIds(next)
     })
   })
 
@@ -685,6 +749,8 @@ describe('gameEngine', () => {
       expect(next.player.bank).toHaveLength(1)
       expect(next.player.bank[0].id).toBe('m-5a')
       expect(next.turnPhase.type).toBe('play')
+      expectCardConservation(withSelection, next)
+      expectNoDuplicateCardIds(next)
     })
 
     it('auto-completes payment when debtor has nothing', () => {
@@ -769,6 +835,77 @@ describe('gameEngine', () => {
     })
   })
 
+  describe('invariant stress checks', () => {
+    it('maintains card conservation and uniqueness across randomized payment scenarios', () => {
+      const random = createSeededRandom(20260226)
+      const bankPool = ['m-1a', 'm-1b', 'm-2a', 'm-2b', 'm-3a', 'm-4a', 'm-5a', 'm-10']
+      const redPool = ['p-red-1', 'p-red-2', 'p-red-3']
+      const brownPool = ['p-brown-1', 'p-brown-2']
+      const lightBluePool = ['p-lb-1', 'p-lb-2', 'p-lb-3']
+      const buildingPool = ['b-house-1', 'b-house-2', 'b-hotel-1']
+
+      for (let trial = 0; trial < 40; trial++) {
+        const bankCards = pickUnique(bankPool, 2 + Math.floor(random() * 4), random).map(findCardById)
+        const redCards = pickUnique(redPool, 1 + Math.floor(random() * 3), random)
+        const brownCards = pickUnique(brownPool, 1 + Math.floor(random() * 2), random)
+        const lightBlueCards = pickUnique(lightBluePool, 1 + Math.floor(random() * 3), random)
+
+        const field: PropertyGroup[] = []
+        if (redCards.length > 0) {
+          field.push({ color: 'red', cards: redCards.map(findCardById), buildings: [] })
+        }
+        if (brownCards.length > 0) {
+          field.push({ color: 'brown', cards: brownCards.map(findCardById), buildings: [] })
+        }
+        if (lightBlueCards.length > 0) {
+          field.push({ color: 'lightBlue', cards: lightBlueCards.map(findCardById), buildings: [] })
+        }
+
+        let buildingIndex = 0
+        for (const group of field) {
+          if (
+            group.cards.length >= SET_SIZE[group.color]
+            && random() < 0.5
+            && buildingIndex < buildingPool.length
+          ) {
+            group.buildings.push(findCardById(buildingPool[buildingIndex]))
+            buildingIndex++
+          }
+        }
+
+        const debtor: PlayerState = { hand: [], bank: bankCards, field }
+        const creditor: PlayerState = { hand: [], bank: [findCardById('m-5b')], field: [] }
+        const payableIds = getPayableCards(debtor).map((c) => c.id)
+        const selectedPayment = pickUnique(
+          payableIds,
+          Math.floor(random() * (payableIds.length + 1)),
+          random,
+        )
+        const amount = 1 + Math.floor(random() * 12)
+
+        const state = makeState({
+          player: debtor,
+          ai: creditor,
+          turnPhase: {
+            type: 'awaitingPayment',
+            debt: {
+              creditor: 'ai',
+              debtor: 'player',
+              amount,
+              source: 'rent',
+              selectedPayment,
+            },
+          },
+        })
+
+        expectNoDuplicateCardIds(state)
+        const next = confirmPayment(state)
+        expectCardConservation(state, next)
+        expectNoDuplicateCardIds(next)
+      }
+    })
+  })
+
   // -------------------------------------------------------------------------
   // Steal / Swap
   // -------------------------------------------------------------------------
@@ -831,7 +968,7 @@ describe('gameEngine', () => {
       })
 
       const next = playSlyDeal(state, card.id)
-      expect(next).toBe(state) // unchanged
+      expect(next).toEqual(state)
     })
 
     it('completeSlyDeal moves card to player field', () => {
@@ -851,6 +988,8 @@ describe('gameEngine', () => {
       expect(next.player.field[0].cards[0].id).toBe('p-red-1')
       expect(next.ai.field[0].cards).toHaveLength(1)
       expect(next.turnPhase.type).toBe('play')
+      expectCardConservation(state, next)
+      expectNoDuplicateCardIds(next)
     })
   })
 
@@ -877,7 +1016,7 @@ describe('gameEngine', () => {
       })
 
       const next = playForcedDeal(state, card.id)
-      expect(next).toBe(state)
+      expect(next).toEqual(state)
     })
 
     it('does nothing when opponent has no stealable properties to take', () => {
@@ -888,7 +1027,7 @@ describe('gameEngine', () => {
       })
 
       const next = playForcedDeal(state, card.id)
-      expect(next).toBe(state)
+      expect(next).toEqual(state)
     })
 
     it('completeForcedDeal swaps properties', () => {
@@ -911,6 +1050,8 @@ describe('gameEngine', () => {
       // Player should now have red, AI should have brown
       expect(next.player.field.find((g) => g.color === 'red')?.cards[0].id).toBe('p-red-1')
       expect(next.ai.field.find((g) => g.color === 'brown')?.cards[0].id).toBe('p-brown-1')
+      expectCardConservation(state, next)
+      expectNoDuplicateCardIds(next)
     })
 
     it('completeForcedDeal rejects giving a card from a complete set', () => {
@@ -930,7 +1071,7 @@ describe('gameEngine', () => {
       })
 
       const next = completeForcedDeal(state, 'p-brown-1', 'p-red-1')
-      expect(next).toBe(state)
+      expect(next).toEqual(state)
     })
   })
 
@@ -962,7 +1103,7 @@ describe('gameEngine', () => {
       })
 
       const next = playDealBreaker(state, card.id)
-      expect(next).toBe(state)
+      expect(next).toEqual(state)
     })
 
     it('completeDealBreaker steals entire set with buildings', () => {
@@ -986,6 +1127,8 @@ describe('gameEngine', () => {
       expect(next.player.field[0].cards).toHaveLength(2)
       expect(next.player.field[0].buildings).toHaveLength(1)
       expect(next.ai.field).toHaveLength(0)
+      expectCardConservation(state, next)
+      expectNoDuplicateCardIds(next)
     })
 
     it('completeDealBreaker merges with existing same-color group', () => {
@@ -1022,6 +1165,8 @@ describe('gameEngine', () => {
       expect(darkBlueGroups[0].cards).toHaveLength(3)
       expect(darkBlueGroups[0].buildings).toHaveLength(1)
       expect(next.ai.field).toHaveLength(0)
+      expectCardConservation(state, next)
+      expectNoDuplicateCardIds(next)
     })
   })
 
@@ -1156,6 +1301,8 @@ describe('gameEngine', () => {
       expect(next.player.hand).toHaveLength(7)
       expect(next.discardPile).toHaveLength(1)
       expect(next.currentTurn).toBe('ai') // switched turns
+      expectCardConservation(state, next)
+      expectNoDuplicateCardIds(next)
     })
 
     it('stays in discard phase when still over 7', () => {
@@ -1178,7 +1325,7 @@ describe('gameEngine', () => {
         turnPhase: { type: 'play', playsRemaining: 3 },
       })
       const next = discardCards(state, ['some-id'])
-      expect(next).toBe(state)
+      expect(next).toEqual(state)
     })
   })
 
@@ -1214,6 +1361,205 @@ describe('gameEngine', () => {
       expect(SET_SIZE.yellow).toBe(3)
       expect(SET_SIZE.green).toBe(3)
       expect(SET_SIZE.railroad).toBe(4)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // isCompleteSet — all-wild validation
+  // -------------------------------------------------------------------------
+  describe('isCompleteSet — non-wild requirement', () => {
+    it('rejects a set of all wild cards', () => {
+      const rainbow1 = WILD_CARDS.find((c) => c.id === 'w-rainbow-1')!
+      const rainbow2 = WILD_CARDS.find((c) => c.id === 'w-rainbow-2')!
+      const group: PropertyGroup = {
+        color: 'brown',
+        cards: [rainbow1, rainbow2],
+        buildings: [],
+      }
+      expect(isCompleteSet(group)).toBe(false)
+    })
+
+    it('accepts a set with at least one standard property', () => {
+      const brownProp = findCardById('p-brown-1')
+      const wildCard = WILD_CARDS.find((c) => c.id === 'w-rainbow-1')!
+      const group: PropertyGroup = {
+        color: 'brown',
+        cards: [brownProp, wildCard],
+        buildings: [],
+      }
+      expect(isCompleteSet(group)).toBe(true)
+    })
+
+    it('rejects a set of dual-color wilds only', () => {
+      const wild1 = WILD_CARDS.find((c) => c.id === 'w-gr-db')!
+      const wild2 = WILD_CARDS.find((c) => c.id === 'w-gr-rr')!
+      const group: PropertyGroup = {
+        color: 'green',
+        cards: [wild1, wild2, WILD_CARDS.find((c) => c.id === 'w-rainbow-1')!],
+        buildings: [],
+      }
+      expect(isCompleteSet(group)).toBe(false)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Wild card relocation from complete sets
+  // -------------------------------------------------------------------------
+  describe('wild card relocation from complete sets', () => {
+    it('allows relocating a wild from a complete set', () => {
+      const brownProp = findCardById('p-brown-1')
+      const wildCard = WILD_CARDS.find((c) => c.id === 'w-br-lb')!
+      const state = makeState({
+        player: {
+          hand: [],
+          field: [{ color: 'brown', cards: [brownProp, wildCard], buildings: [] }],
+          bank: [],
+        },
+      })
+      const result = relocateWildOnField(state, 'w-br-lb', 'lightBlue')
+      // Wild should have moved out — brown group now has 1 card
+      const brownGroup = result.player.field.find((g) => g.color === 'brown')
+      expect(brownGroup?.cards.length).toBe(1)
+      // lightBlue group should exist with the wild
+      const lbGroup = result.player.field.find((g) => g.color === 'lightBlue')
+      expect(lbGroup?.cards.some((c) => c.id === 'w-br-lb')).toBe(true)
+    })
+
+    it('getRelocatableWilds includes wilds from complete sets', () => {
+      const brownProp = findCardById('p-brown-1')
+      const wildCard = WILD_CARDS.find((c) => c.id === 'w-br-lb')!
+      const state = makeState({
+        player: {
+          hand: [],
+          field: [{ color: 'brown', cards: [brownProp, wildCard], buildings: [] }],
+          bank: [],
+        },
+      })
+      const wilds = getRelocatableWilds(state, 'player')
+      expect(wilds).toHaveLength(1)
+      expect(wilds[0].cardId).toBe('w-br-lb')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Draw 5 if hand empty
+  // -------------------------------------------------------------------------
+  describe('executeDraw — draw 5 if hand empty', () => {
+    it('draws 5 cards when hand is empty', () => {
+      const cards = [...PROPERTY_CARDS.slice(0, 10)]
+      const state = makeState({
+        drawPile: cards,
+        player: { hand: [], field: [], bank: [] },
+        turnPhase: { type: 'draw' },
+      })
+      const result = executeDraw(state)
+      expect(result.player.hand).toHaveLength(5)
+    })
+
+    it('draws 2 cards when hand is not empty', () => {
+      const cards = [...PROPERTY_CARDS.slice(0, 10)]
+      const state = makeState({
+        drawPile: cards,
+        player: { hand: [PROPERTY_CARDS[10]], field: [], bank: [] },
+        turnPhase: { type: 'draw' },
+      })
+      const result = executeDraw(state)
+      expect(result.player.hand).toHaveLength(3) // 1 existing + 2 drawn
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Building relocation
+  // -------------------------------------------------------------------------
+  describe('building relocation', () => {
+    const house = BUILDING_CARDS.find((c) => c.name === 'House')!
+    const hotel = BUILDING_CARDS.find((c) => c.name === 'Hotel')!
+
+    it('getRelocatableBuildings returns buildings that can move', () => {
+      const state = makeState({
+        player: {
+          hand: [],
+          field: [
+            { color: 'brown', cards: [findCardById('p-brown-1'), findCardById('p-brown-2')], buildings: [house] },
+            { color: 'darkBlue', cards: [findCardById('p-db-1'), findCardById('p-db-2')], buildings: [] },
+          ],
+          bank: [],
+        },
+      })
+      const relocatable = getRelocatableBuildings(state, 'player')
+      expect(relocatable).toHaveLength(1)
+      expect(relocatable[0].cardId).toBe(house.id)
+      expect(relocatable[0].currentColor).toBe('brown')
+    })
+
+    it('returns empty if only one complete set', () => {
+      const state = makeState({
+        player: {
+          hand: [],
+          field: [
+            { color: 'brown', cards: [findCardById('p-brown-1'), findCardById('p-brown-2')], buildings: [house] },
+          ],
+          bank: [],
+        },
+      })
+      expect(getRelocatableBuildings(state, 'player')).toHaveLength(0)
+    })
+
+    it('relocateBuildingOnField moves a house between complete sets', () => {
+      const state = makeState({
+        player: {
+          hand: [],
+          field: [
+            { color: 'brown', cards: [findCardById('p-brown-1'), findCardById('p-brown-2')], buildings: [house] },
+            { color: 'darkBlue', cards: [findCardById('p-db-1'), findCardById('p-db-2')], buildings: [] },
+          ],
+          bank: [],
+        },
+      })
+      const result = relocateBuildingOnField(state, house.id, 'darkBlue')
+      const brownGroup = result.player.field.find((g) => g.color === 'brown')!
+      const blueGroup = result.player.field.find((g) => g.color === 'darkBlue')!
+      expect(brownGroup.buildings).toHaveLength(0)
+      expect(blueGroup.buildings).toHaveLength(1)
+      expect(blueGroup.buildings[0].id).toBe(house.id)
+    })
+
+    it('blocks hotel relocation to set without a house', () => {
+      const house2 = BUILDING_CARDS.filter((c) => c.name === 'House')[1]
+      const state = makeState({
+        player: {
+          hand: [],
+          field: [
+            { color: 'brown', cards: [findCardById('p-brown-1'), findCardById('p-brown-2')], buildings: [house, hotel] },
+            { color: 'darkBlue', cards: [findCardById('p-db-1'), findCardById('p-db-2')], buildings: [] },
+            { color: 'red', cards: [findCardById('p-red-1'), findCardById('p-red-2'), findCardById('p-red-3')], buildings: [house2] },
+          ],
+          bank: [],
+        },
+      })
+      // Hotel to darkBlue (no house) should be blocked
+      const result1 = relocateBuildingOnField(state, hotel.id, 'darkBlue')
+      expect(result1).toBe(state) // unchanged
+      // Hotel to red (has house) should succeed
+      const result2 = relocateBuildingOnField(state, hotel.id, 'red')
+      expect(result2).not.toBe(state)
+      const redGroup = result2.player.field.find((g) => g.color === 'red')!
+      expect(redGroup.buildings.some((b) => b.name === 'Hotel')).toBe(true)
+    })
+
+    it('blocks relocation to railroad or utility', () => {
+      const state = makeState({
+        player: {
+          hand: [],
+          field: [
+            { color: 'brown', cards: [findCardById('p-brown-1'), findCardById('p-brown-2')], buildings: [house] },
+            { color: 'railroad', cards: [findCardById('p-rr-1'), findCardById('p-rr-2'), findCardById('p-rr-3'), findCardById('p-rr-4')], buildings: [] },
+          ],
+          bank: [],
+        },
+      })
+      const result = relocateBuildingOnField(state, house.id, 'railroad')
+      expect(result).toBe(state) // unchanged
     })
   })
 })

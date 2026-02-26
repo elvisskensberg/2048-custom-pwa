@@ -28,7 +28,25 @@ export default defineConfig({
         'src/test/',
         '**/*.config.*',
         '**/dist/**',
-      ]
+      ],
+      thresholds: {
+        statements: 60,
+        branches: 45,
+        functions: 60,
+        lines: 60,
+        'src/monopoly-deal/aiStrategy.ts': {
+          statements: 85,
+          branches: 65,
+          functions: 95,
+          lines: 85,
+        },
+        'src/monopoly-deal/gameEngine.ts': {
+          statements: 75,
+          branches: 55,
+          functions: 85,
+          lines: 75,
+        },
+      },
     },
     // Mock static assets
     mockReset: true,

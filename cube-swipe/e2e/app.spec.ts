@@ -176,8 +176,9 @@ test.describe('Elvis Skensberg AI Showcase', () => {
   test('should navigate to Monopoly Deal screen', async ({ page }, testInfo) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'Monopoly Deal' }).click()
+    await page.getByRole('button', { name: 'New Game' }).click()
     await expect(page.getByText('Your Field')).toBeVisible()
-    await expect(page.getByText('Opponent')).toBeVisible()
+    await expect(page.getByText('AI')).toBeVisible()
 
     await page.screenshot({
       path: `e2e/screenshots/${testInfo.project.name}/app-monopoly-deal.png`,

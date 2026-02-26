@@ -22,6 +22,8 @@ import {
   getSelectedPaymentValue,
   canPlaceBuilding,
   canPlayCard,
+  getBuildingRelocationTargets,
+  calculateRent,
 } from '../monopoly-deal/gameEngine'
 
 // ---------------------------------------------------------------------------
@@ -68,6 +70,9 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
     initiateWildRelocation,
     completeWildRelocation,
     relocatableWilds,
+    initiateBuildingRelocation,
+    completeBuildingRelocation,
+    relocatableBuildings,
     discardCard,
     endTurn,
   } = game
@@ -142,10 +147,16 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
     }
   }
 
-  // During play phase, highlight relocatable wilds so player knows they can click them
-  if (turnPhase.type === 'play' && currentTurn === 'player' && relocatableWilds.length > 0) {
-    plHighCards = relocatableWilds.map((w) => w.cardId)
-    plSelMode = 'card'
+  // During play phase, highlight relocatable wilds and buildings so player knows they can click them
+  if (turnPhase.type === 'play' && currentTurn === 'player') {
+    const relocIds = [
+      ...relocatableWilds.map((w) => w.cardId),
+      ...relocatableBuildings.map((b) => b.cardId),
+    ]
+    if (relocIds.length > 0) {
+      plHighCards = relocIds
+      plSelMode = 'card'
+    }
   }
 
   // ── Status text ──
@@ -167,20 +178,29 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
   if (turnPhase.type === 'awaitingWildRelocation') {
     const card = gameState.player.field.flatMap((g) => g.cards).find((c) => c.id === turnPhase.wildCardId)
     if (card) {
+      const completeSets = new Set(getCompleteSetColors(gameState.player))
       if (card.color && card.color2) {
-        // Dual-color wild: can only be placed in its two colors
-        if (card.color !== turnPhase.currentColor) wildRelocationColors.push(card.color)
-        if (card.color2 !== turnPhase.currentColor) wildRelocationColors.push(card.color2)
+        // Dual-color wild: can only be placed in its two colors (excluding source and complete sets)
+        if (card.color !== turnPhase.currentColor && !completeSets.has(card.color)) wildRelocationColors.push(card.color)
+        if (card.color2 !== turnPhase.currentColor && !completeSets.has(card.color2)) wildRelocationColors.push(card.color2)
       } else {
-        // Rainbow wild: any color
+        // Rainbow wild: any color (excluding source and complete sets)
         const allColors: PropertyColor[] = ['brown', 'lightBlue', 'pink', 'orange', 'red', 'yellow', 'green', 'darkBlue', 'railroad', 'utility']
-        wildRelocationColors.push(...allColors.filter((c) => c !== turnPhase.currentColor))
+        wildRelocationColors.push(...allColors.filter((c) => c !== turnPhase.currentColor && !completeSets.has(c)))
       }
     }
   }
 
+  // ── Building relocation color choices ──
+  const buildingRelocationColors: PropertyColor[] = []
+  if (turnPhase.type === 'awaitingBuildingRelocation') {
+    buildingRelocationColors.push(
+      ...getBuildingRelocationTargets(gameState, 'player', turnPhase.buildingCardId, turnPhase.sourceColor),
+    )
+  }
+
   return (
-    <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', position: 'relative' }}>
+    <Box sx={{ width: '100%', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', bgcolor: 'background.default', position: 'relative' }}>
       <BackButton onClick={onBack} />
 
       <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', pt: 7 }}>
@@ -238,8 +258,12 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
             onCardClick={(cardId) => {
               if (turnPhase.type === 'awaitingForcedDealSelect' && turnPhase.phase === 'give') {
                 selectForcedDealGive(cardId)
-              } else if (turnPhase.type === 'play' && currentTurn === 'player' && relocatableWilds.some((w) => w.cardId === cardId)) {
-                initiateWildRelocation(cardId)
+              } else if (turnPhase.type === 'play' && currentTurn === 'player') {
+                if (relocatableWilds.some((w) => w.cardId === cardId)) {
+                  initiateWildRelocation(cardId)
+                } else if (relocatableBuildings.some((b) => b.cardId === cardId)) {
+                  initiateBuildingRelocation(cardId)
+                }
               }
             }}
             highlightedCards={plHighCards}
@@ -343,6 +367,14 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
         onCancel={cancelAction}
       />
 
+      <ColorPickerDialog
+        open={turnPhase.type === 'awaitingBuildingRelocation' && currentTurn === 'player'}
+        title="Move building to which set?"
+        colors={buildingRelocationColors}
+        onSelect={completeBuildingRelocation}
+        onCancel={cancelAction}
+      />
+
       <PaymentDialog
         open={turnPhase.type === 'awaitingPayment' && turnPhase.debt.debtor === 'player' && !isAIThinking}
         debt={turnPhase.type === 'awaitingPayment' ? turnPhase.debt : null}
@@ -354,6 +386,17 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
       <JSNDialog
         open={turnPhase.type === 'awaitingJSN' && !isAIThinking && (turnPhase.jsnChain.currentDecider === 'player')}
         actionName={turnPhase.type === 'awaitingJSN' ? turnPhase.jsnChain.originalAction.actionCard.name : ''}
+        amount={turnPhase.type === 'awaitingJSN' ? (() => {
+          const action = turnPhase.jsnChain.originalAction
+          const src = action.sourcePlayer
+          if (action.actionCard.name === 'Debt Collector') return 5
+          if (action.actionCard.name === "It's My Birthday") return 2
+          if (action.targetColor) {
+            const ps = src === 'ai' ? gameState.ai : gameState.player
+            return calculateRent(ps, action.targetColor, !!action.doubleRentCardId)
+          }
+          return undefined
+        })() : undefined}
         hasJSN={playerHand.some((c) => c.name === 'Just Say No')}
         onUseJSN={() => {
           const jsn = playerHand.find((c) => c.name === 'Just Say No')
@@ -481,17 +524,18 @@ function PaymentDialog({
 }
 
 function JSNDialog({
-  open, actionName, hasJSN, onUseJSN, onAccept,
+  open, actionName, amount, hasJSN, onUseJSN, onAccept,
 }: {
-  open: boolean; actionName: string; hasJSN: boolean; onUseJSN: () => void; onAccept: () => void
+  open: boolean; actionName: string; amount?: number; hasJSN: boolean; onUseJSN: () => void; onAccept: () => void
 }): React.JSX.Element {
+  const amountStr = amount != null ? ` for ${amount}M` : ''
   return (
     <Dialog open={open}>
-      <DialogTitle>AI played {actionName}!</DialogTitle>
+      <DialogTitle>AI played {actionName}{amountStr}!</DialogTitle>
       <DialogContent>
         <Typography>
           {hasJSN
-            ? `Block ${actionName} with Just Say No?`
+            ? `Block ${actionName}${amountStr} with Just Say No?`
             : `You don't have a Just Say No card. You must accept the ${actionName}.`}
         </Typography>
       </DialogContent>
@@ -540,6 +584,7 @@ function getStatusText(
     case 'awaitingDoubleRentConfirm': return 'Use Double Rent?'
     case 'awaitingBuildingTarget': return 'Choose a set to build on'
     case 'awaitingWildRelocation': return 'Move wild card to which color?'
+    case 'awaitingBuildingRelocation': return 'Move building to which set?'
     default: return ''
   }
 }
@@ -547,8 +592,12 @@ function getStatusText(
 function getWildColors(state: MonopolyDealState, cardId: string): PropertyColor[] {
   const card = state.player.hand.find((c) => c.id === cardId)
   if (!card) return []
-  if (card.color && card.color2) return [card.color, card.color2]
-  return ['brown', 'lightBlue', 'pink', 'orange', 'red', 'yellow', 'green', 'darkBlue', 'railroad', 'utility']
+  const completeSets = new Set(getCompleteSetColors(state.player))
+  if (card.color && card.color2) {
+    return [card.color, card.color2].filter((c) => !completeSets.has(c))
+  }
+  return (['brown', 'lightBlue', 'pink', 'orange', 'red', 'yellow', 'green', 'darkBlue', 'railroad', 'utility'] as PropertyColor[])
+    .filter((c) => !completeSets.has(c))
 }
 
 function getRentColors(state: MonopolyDealState, cardId: string): PropertyColor[] {

@@ -73,6 +73,7 @@ export type TurnPhase =
   | { type: 'awaitingDoubleRentConfirm'; rentCardId: string; doubleRentCardId: string }
   | { type: 'awaitingBuildingTarget'; cardId: string }
   | { type: 'awaitingWildRelocation'; wildCardId: string; currentColor: PropertyColor }
+  | { type: 'awaitingBuildingRelocation'; buildingCardId: string; sourceColor: PropertyColor }
   | { type: 'gameOver'; winner: PlayerId }
 
 export interface MonopolyDealState {
@@ -189,10 +190,12 @@ export function drawCards(state: MonopolyDealState, player: PlayerId, count: num
   return s
 }
 
-/** Execute the mandatory draw phase (draw 2, then move to play phase). */
+/** Execute the mandatory draw phase (draw 2 — or 5 if hand is empty — then move to play phase). */
 export function executeDraw(state: MonopolyDealState): MonopolyDealState {
-  let s = drawCards(state, state.currentTurn, 2)
-  s = addLog(s, state.currentTurn, 'Drew 2 cards')
+  const ps = getPlayer(state, state.currentTurn)
+  const drawCount = ps.hand.length === 0 ? 5 : 2
+  let s = drawCards(state, state.currentTurn, drawCount)
+  s = addLog(s, state.currentTurn, `Drew ${drawCount} cards`)
   s = { ...s, turnPhase: { type: 'play', playsRemaining: 3 }, playsUsedThisTurn: 0 }
   return s
 }
@@ -202,7 +205,9 @@ export function executeDraw(state: MonopolyDealState): MonopolyDealState {
 // ---------------------------------------------------------------------------
 
 export function isCompleteSet(group: PropertyGroup): boolean {
-  return group.cards.length >= SET_SIZE[group.color]
+  if (group.cards.length < SET_SIZE[group.color]) return false
+  // A complete set must contain at least one standard (non-wild) property card
+  return group.cards.some((c) => c.type !== 'wild')
 }
 
 export function countCompleteSets(ps: PlayerState): number {
@@ -308,6 +313,10 @@ export function playPropertyToField(
   const ps = getPlayer(state, p)
   const card = ps.hand.find((c) => c.id === cardId)
   if (!card) return state
+
+  // Block adding to a group that is already complete
+  const existingGroup = ps.field.find((g) => g.color === targetColor)
+  if (existingGroup && isCompleteSet(existingGroup)) return state
 
   let newPs = removeFromHand(ps, cardId)
 
@@ -1233,10 +1242,13 @@ export function relocateWildOnField(
   if (!foundCard || sourceGroupIdx < 0) return state
 
   const sourceGroup = ps.field[sourceGroupIdx]
-  // Don't allow moving from a complete set
-  if (isCompleteSet(sourceGroup)) return state
   // No-op if same color
   if (sourceGroup.color === newColor) return state
+  // Block relocation from complete sets with buildings — move buildings first
+  if (isCompleteSet(sourceGroup) && sourceGroup.buildings.length > 0) return state
+  // Block relocation into an already-complete target group
+  const targetGroup = ps.field.find((g) => g.color === newColor)
+  if (targetGroup && isCompleteSet(targetGroup)) return state
 
   // Remove wild from source group
   let newField = [...ps.field]
@@ -1262,12 +1274,13 @@ export function relocateWildOnField(
   return s
 }
 
-/** Get wild cards on a player's field that can be relocated (not in complete sets). */
+/** Get wild cards on a player's field that can be relocated. */
 export function getRelocatableWilds(state: MonopolyDealState, playerId: PlayerId): { cardId: string; currentColor: PropertyColor }[] {
   const ps = getPlayer(state, playerId)
   const result: { cardId: string; currentColor: PropertyColor }[] = []
   for (const group of ps.field) {
-    if (isCompleteSet(group)) continue
+    // Skip wilds in complete sets that have buildings — move buildings first
+    if (isCompleteSet(group) && group.buildings.length > 0) continue
     for (const card of group.cards) {
       if (card.type === 'wild') {
         result.push({ cardId: card.id, currentColor: group.color })
@@ -1275,6 +1288,129 @@ export function getRelocatableWilds(state: MonopolyDealState, playerId: PlayerId
     }
   }
   return result
+}
+
+// ---------------------------------------------------------------------------
+// Building Relocation (free action — does not consume a play)
+// ---------------------------------------------------------------------------
+
+/** Get buildings on a player's field that can be relocated to another complete set. */
+export function getRelocatableBuildings(
+  state: MonopolyDealState,
+  playerId: PlayerId,
+): { cardId: string; currentColor: PropertyColor; buildingName: string }[] {
+  const ps = getPlayer(state, playerId)
+  const result: { cardId: string; currentColor: PropertyColor; buildingName: string }[] = []
+
+  // Count how many complete sets (excluding railroad/utility) can accept each building type
+  const completeSets = ps.field.filter(
+    (g) => isCompleteSet(g) && g.color !== 'railroad' && g.color !== 'utility',
+  )
+  // Need at least 2 complete sets for relocation to make sense
+  if (completeSets.length < 2) return result
+
+  for (const group of completeSets) {
+    for (const building of group.buildings) {
+      // Check if there's at least one valid target set
+      const hasTarget = completeSets.some((target) => {
+        if (target.color === group.color) return false
+        if (building.name === 'House') return !target.buildings.some((b) => b.name === 'House')
+        if (building.name === 'Hotel') {
+          return target.buildings.some((b) => b.name === 'House') && !target.buildings.some((b) => b.name === 'Hotel')
+        }
+        return false
+      })
+      if (hasTarget) {
+        result.push({ cardId: building.id, currentColor: group.color, buildingName: building.name })
+      }
+    }
+  }
+  return result
+}
+
+/** Get valid target colors for relocating a specific building. */
+export function getBuildingRelocationTargets(
+  state: MonopolyDealState,
+  playerId: PlayerId,
+  buildingCardId: string,
+  sourceColor: PropertyColor,
+): PropertyColor[] {
+  const ps = getPlayer(state, playerId)
+  const sourceGroup = ps.field.find((g) => g.color === sourceColor)
+  if (!sourceGroup) return []
+  const building = sourceGroup.buildings.find((b) => b.id === buildingCardId)
+  if (!building) return []
+
+  const targets: PropertyColor[] = []
+  for (const group of ps.field) {
+    if (group.color === sourceColor) continue
+    if (!isCompleteSet(group)) continue
+    if (group.color === 'railroad' || group.color === 'utility') continue
+    if (building.name === 'House' && !group.buildings.some((b) => b.name === 'House')) {
+      targets.push(group.color)
+    }
+    if (building.name === 'Hotel' && group.buildings.some((b) => b.name === 'House') && !group.buildings.some((b) => b.name === 'Hotel')) {
+      targets.push(group.color)
+    }
+  }
+  return targets
+}
+
+/** Move a building from one complete set to another on the current player's field. */
+export function relocateBuildingOnField(
+  state: MonopolyDealState,
+  buildingCardId: string,
+  targetColor: PropertyColor,
+): MonopolyDealState {
+  const p = state.currentTurn
+  const ps = getPlayer(state, p)
+
+  // Find the building in the player's field
+  let foundBuilding: MonopolyCardData | null = null
+  let sourceGroupIdx = -1
+  for (let i = 0; i < ps.field.length; i++) {
+    const building = ps.field[i].buildings.find((b) => b.id === buildingCardId)
+    if (building) {
+      foundBuilding = building
+      sourceGroupIdx = i
+      break
+    }
+  }
+  if (!foundBuilding || sourceGroupIdx < 0) return state
+
+  const sourceGroup = ps.field[sourceGroupIdx]
+  if (!isCompleteSet(sourceGroup)) return state
+  if (sourceGroup.color === targetColor) return state
+
+  // Find target group
+  const targetGroupIdx = ps.field.findIndex((g) => g.color === targetColor)
+  if (targetGroupIdx < 0) return state
+  const targetGroup = ps.field[targetGroupIdx]
+  if (!isCompleteSet(targetGroup)) return state
+  if (targetGroup.color === 'railroad' || targetGroup.color === 'utility') return state
+
+  // Validate placement
+  if (foundBuilding.name === 'House' && targetGroup.buildings.some((b) => b.name === 'House')) return state
+  if (foundBuilding.name === 'Hotel') {
+    if (!targetGroup.buildings.some((b) => b.name === 'House')) return state
+    if (targetGroup.buildings.some((b) => b.name === 'Hotel')) return state
+  }
+
+  // Move building
+  const newField = [...ps.field]
+  newField[sourceGroupIdx] = {
+    ...sourceGroup,
+    buildings: sourceGroup.buildings.filter((b) => b.id !== buildingCardId),
+  }
+  newField[targetGroupIdx] = {
+    ...targetGroup,
+    buildings: [...targetGroup.buildings, foundBuilding],
+  }
+
+  const newPs = { ...ps, field: newField }
+  let s = setPlayer(state, p, newPs)
+  s = addLog(s, p, `Moved ${foundBuilding.name} from ${sourceGroup.color} to ${targetColor}`)
+  return s
 }
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import type { PropertyColor, MonopolyCardData } from '../monopoly-deal/cardData'
+import { type PropertyColor, type MonopolyCardData } from '../monopoly-deal/cardData'
 import type {
   MonopolyDealState,
   PlayerId,
@@ -38,8 +38,11 @@ import {
   canPlayCard as engineCanPlayCard,
   checkWinCondition,
   getSelectedPaymentValue,
+  calculateRent,
   relocateWildOnField,
   getRelocatableWilds,
+  relocateBuildingOnField,
+  getRelocatableBuildings,
   serializeState,
   deserializeState,
 } from '../monopoly-deal/gameEngine'
@@ -94,6 +97,9 @@ export interface UseMonopolyDealReturn {
   initiateWildRelocation: (wildCardId: string) => void
   completeWildRelocation: (newColor: PropertyColor) => void
   relocatableWilds: { cardId: string; currentColor: PropertyColor }[]
+  initiateBuildingRelocation: (buildingCardId: string) => void
+  completeBuildingRelocation: (targetColor: PropertyColor) => void
+  relocatableBuildings: { cardId: string; currentColor: PropertyColor; buildingName: string }[]
   discardCard: (cardId: string) => void
   endTurn: () => void
 
@@ -107,8 +113,8 @@ export interface UseMonopolyDealReturn {
 
 import { logState, logAction } from '../monopoly-deal/gameLogger'
 
-const AI_ACTION_DELAY_MS = 320
-const AI_RESOLUTION_DELAY_MS = 140
+const AI_ACTION_DELAY_MS = 220
+const AI_RESOLUTION_DELAY_MS = 80
 const MAX_AI_RESOLUTION_STEPS = 24
 
 function delay(ms: number): Promise<void> {
@@ -127,6 +133,7 @@ function canAIAct(state: MonopolyDealState): boolean {
     case 'awaitingBuildingTarget':
     case 'awaitingWildColor':
     case 'awaitingRentColor':
+    case 'awaitingBuildingRelocation':
       return true
     case 'awaitingPayment':
       return state.turnPhase.debt.debtor === 'ai'
@@ -135,6 +142,38 @@ function canAIAct(state: MonopolyDealState): boolean {
     default:
       return false
   }
+}
+
+function isWildRentCard(card: MonopolyCardData): boolean {
+  return card.type === 'rent' && !card.color && !card.color2
+}
+
+const RENT_COLORS: PropertyColor[] = [
+  'brown',
+  'lightBlue',
+  'pink',
+  'orange',
+  'red',
+  'yellow',
+  'green',
+  'darkBlue',
+  'railroad',
+  'utility',
+]
+
+function selectHighestRentColor(ps: PlayerState): PropertyColor {
+  let bestColor = RENT_COLORS[0]
+  let bestRent = -1
+
+  for (const color of RENT_COLORS) {
+    const rent = calculateRent(ps, color, false)
+    if (rent > bestRent) {
+      bestRent = rent
+      bestColor = color
+    }
+  }
+
+  return bestColor
 }
 
 /** Apply an AI decision to the game state, returning the new state. */
@@ -220,6 +259,12 @@ function applyAIDecision(state: MonopolyDealState, decision: AIDecision): Monopo
       }
       if (state.turnPhase.type === 'awaitingBuildingTarget' && decision.targetColor) {
         return playBuilding(state, state.turnPhase.cardId, decision.targetColor)
+      }
+      if (state.turnPhase.type === 'awaitingBuildingRelocation' && decision.targetColor) {
+        let s = relocateBuildingOnField(state, state.turnPhase.buildingCardId, decision.targetColor)
+        const remaining = 3 - s.playsUsedThisTurn
+        s = { ...s, turnPhase: { type: 'play', playsRemaining: remaining } }
+        return s
       }
       return state
 
@@ -584,6 +629,10 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
             ...gameState,
             turnPhase: { type: 'awaitingDoubleRentConfirm', rentCardId: cardId, doubleRentCardId: doubleRent.id },
           })
+        } else if (isWildRentCard(card)) {
+          const bestColor = selectHighestRentColor(gameState.player)
+          const s = playRentCard(gameState, cardId, undefined, bestColor)
+          updateState(s)
         } else {
           updateState({
             ...gameState,
@@ -751,6 +800,15 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
     if (!gameState || gameState.turnPhase.type !== 'awaitingDoubleRentConfirm') return
     const { rentCardId, doubleRentCardId } = gameState.turnPhase
     logAction('Player', 'confirmDoubleRent', `${rentCardId} + ${doubleRentCardId}`)
+
+    const rentCard = gameState.player.hand.find((c) => c.id === rentCardId)
+    if (rentCard && isWildRentCard(rentCard)) {
+      const bestColor = selectHighestRentColor(gameState.player)
+      const s = playRentCard(gameState, rentCardId, doubleRentCardId, bestColor)
+      updateState(s)
+      return
+    }
+
     // Move to rent color selection with double rent attached
     updateState({
       ...gameState,
@@ -762,6 +820,15 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
     if (!gameState || gameState.turnPhase.type !== 'awaitingDoubleRentConfirm') return
     const { rentCardId } = gameState.turnPhase
     logAction('Player', 'skipDoubleRent', rentCardId)
+
+    const rentCard = gameState.player.hand.find((c) => c.id === rentCardId)
+    if (rentCard && isWildRentCard(rentCard)) {
+      const bestColor = selectHighestRentColor(gameState.player)
+      const s = playRentCard(gameState, rentCardId, undefined, bestColor)
+      updateState(s)
+      return
+    }
+
     // Move to rent color selection without double rent
     updateState({
       ...gameState,
@@ -778,7 +845,8 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
       phase.type === 'awaitingRentColor' ||
       phase.type === 'awaitingBuildingTarget' ||
       phase.type === 'awaitingWildRelocation' ||
-      phase.type === 'awaitingDoubleRentConfirm'
+      phase.type === 'awaitingDoubleRentConfirm' ||
+      phase.type === 'awaitingBuildingRelocation'
     ) {
       logAction('Player', 'CANCEL', phase.type)
       const remaining = 3 - gameState.playsUsedThisTurn
@@ -815,6 +883,37 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
     const { wildCardId } = gameState.turnPhase
     logAction('Player', 'completeWildRelocation', `${wildCardId} → ${newColor}`)
     let s = relocateWildOnField(gameState, wildCardId, newColor)
+    // Restore play phase (relocation is free — does not consume a play)
+    const remaining = 3 - s.playsUsedThisTurn
+    s = { ...s, turnPhase: { type: 'play', playsRemaining: remaining } }
+    updateState(s)
+  }, [gameState, updateState])
+
+  // ── Building relocation (free action — does not consume a play) ──
+  const relocatableBuildings = gameState && gameState.currentTurn === 'player' && gameState.turnPhase.type === 'play'
+    ? getRelocatableBuildings(gameState, 'player')
+    : []
+
+  const initiateBuildingRelocation = useCallback((buildingCardId: string): void => {
+    if (!gameState || gameState.currentTurn !== 'player') return
+    if (gameState.turnPhase.type !== 'play') return
+    for (const group of gameState.player.field) {
+      if (group.buildings.some((b) => b.id === buildingCardId)) {
+        logAction('Player', 'initiateBuildingRelocation', `${buildingCardId} from ${group.color}`)
+        updateState({
+          ...gameState,
+          turnPhase: { type: 'awaitingBuildingRelocation', buildingCardId, sourceColor: group.color },
+        })
+        return
+      }
+    }
+  }, [gameState, updateState])
+
+  const completeBuildingRelocation = useCallback((targetColor: PropertyColor): void => {
+    if (!gameState || gameState.turnPhase.type !== 'awaitingBuildingRelocation') return
+    const { buildingCardId } = gameState.turnPhase
+    logAction('Player', 'completeBuildingRelocation', `${buildingCardId} → ${targetColor}`)
+    let s = relocateBuildingOnField(gameState, buildingCardId, targetColor)
     // Restore play phase (relocation is free — does not consume a play)
     const remaining = 3 - s.playsUsedThisTurn
     s = { ...s, turnPhase: { type: 'play', playsRemaining: remaining } }
@@ -870,6 +969,9 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
     initiateWildRelocation,
     completeWildRelocation,
     relocatableWilds,
+    initiateBuildingRelocation,
+    completeBuildingRelocation,
+    relocatableBuildings,
     discardCard,
     endTurn: endTurnFn,
     isAIThinking,
