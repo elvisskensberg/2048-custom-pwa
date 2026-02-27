@@ -166,7 +166,7 @@ describe('gameEngine', () => {
       expect(state.player.hand).toHaveLength(5)
       expect(state.ai.hand).toHaveLength(5)
       expect(state.turnPhase).toEqual({ type: 'draw' })
-      expect(state.currentTurn).toBe('player')
+      expect(['player', 'ai']).toContain(state.currentTurn)
       expect(state.turnNumber).toBe(1)
     })
 

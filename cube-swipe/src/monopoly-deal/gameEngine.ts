@@ -146,8 +146,8 @@ function emptyPlayer(): PlayerState {
   return { hand: [], field: [], bank: [] }
 }
 
-/** Create a new game: shuffle deck, deal 5 each, player goes first. */
-export function createInitialState(): MonopolyDealState {
+/** Create a new game: shuffle deck, deal 5 each, random first turn. */
+export function createInitialState(firstPlayer?: PlayerId): MonopolyDealState {
   const deck = shuffleDeck(buildFullDeck())
   const playerHand = deck.slice(0, 5)
   const aiHand = deck.slice(5, 10)
@@ -158,7 +158,7 @@ export function createInitialState(): MonopolyDealState {
     discardPile: [],
     player: { ...emptyPlayer(), hand: playerHand },
     ai: { ...emptyPlayer(), hand: aiHand },
-    currentTurn: 'player',
+    currentTurn: firstPlayer ?? (Math.random() < 0.5 ? 'player' : 'ai'),
     turnPhase: { type: 'draw' },
     turnNumber: 1,
     playsUsedThisTurn: 0,

@@ -65,6 +65,17 @@ function App() {
               ? 'comments'
               : 'menu'
 
+  // Lock orientation to portrait for all views except Monopoly Deal
+  useEffect(() => {
+    const so = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void>; unlock?: () => void }
+    if (!so?.lock) return
+    if (currentView === 'monopolyDeal') {
+      so.unlock?.()
+    } else {
+      so.lock('portrait').catch(() => { /* unsupported or not in standalone */ })
+    }
+  }, [currentView])
+
   const handleBack = () => {
     if (gameMode) {
       setGameMode(null)

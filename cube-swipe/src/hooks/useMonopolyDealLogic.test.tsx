@@ -115,6 +115,8 @@ describe('useMonopolyDealLogic', () => {
   })
 
   it('starts a new game with player draw already resolved', () => {
+    // Force player to go first so assertions are deterministic
+    vi.spyOn(Math, 'random').mockReturnValue(0.3)
     const { result } = renderHook(() => useMonopolyDealLogic())
 
     act(() => {
@@ -126,6 +128,7 @@ describe('useMonopolyDealLogic', () => {
     expect(result.current.turnPhase).toEqual({ type: 'play', playsRemaining: 3 })
     expect(result.current.playerHand).toHaveLength(7)
     expect(result.current.isAIThinking).toBe(false)
+    vi.spyOn(Math, 'random').mockRestore()
   })
 
   it('does not trigger AI decisions when phase belongs to player during ai turn', async () => {

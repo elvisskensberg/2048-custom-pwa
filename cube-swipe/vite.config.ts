@@ -23,7 +23,7 @@ export default defineConfig({
         background_color: '#242424',
         display: 'standalone',
         display_override: ['standalone', 'minimal-ui'],
-        orientation: 'portrait',
+        orientation: 'any',
         categories: ['games', 'entertainment'],
         launch_handler: {
           client_mode: 'focus-existing',
