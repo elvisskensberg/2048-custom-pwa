@@ -1470,7 +1470,7 @@ describe('gameEngine', () => {
 
     it('rejects a set of dual-color wilds only', () => {
       const wild1 = WILD_CARDS.find((c) => c.id === 'w-gr-db')!
-      const wild2 = WILD_CARDS.find((c) => c.id === 'w-gr-rr')!
+      const wild2 = WILD_CARDS.find((c) => c.id === 'w-rainbow-2')!
       const group: PropertyGroup = {
         color: 'green',
         cards: [wild1, wild2, WILD_CARDS.find((c) => c.id === 'w-rainbow-1')!],
