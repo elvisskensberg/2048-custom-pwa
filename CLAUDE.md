@@ -14,6 +14,52 @@
 - Comprehensive E2E testing across 5 device profiles
 - Real-time analytics with Azure Application Insights
 
+## Inherited Guidelines (LendTechAI)
+
+This repository now explicitly adopts engineering guidelines from:
+- `C:\Code\LendTechAI\CLAUDE.md`
+- `C:\Code\LendTechAI\Architecture\` (all markdown docs)
+
+Adopted on: 2026-02-27
+
+### Scope and precedence
+
+1. This `CLAUDE.md` remains the primary source of truth for this repository.
+2. LendTechAI guidelines are adopted as quality and architecture standards.
+3. If an imported guideline conflicts with this repository's stack or scripts, use local commands and structure from this repo.
+4. Do not apply Next.js/pnpm/Cypress-specific steps from LendTechAI unless equivalent tooling exists here.
+
+### Mandatory standards adopted from LendTechAI
+
+- Follow instructions exactly; if ambiguous, clarify before implementing.
+- Prefer root-cause fixes over temporary patches.
+- Deliver end-to-end changes: implementation, tests, validation, and documentation updates.
+- Use TDD for bug fixes and new behavior: failing test first, then fix, then green.
+- Run objective validation after changes (tests, lint, type-check, build where applicable).
+- Do not report completion without verifiable evidence.
+- Maintain security-by-default, reliability-by-default, and performance awareness.
+- Keep changes focused and backward-compatible unless a breaking change is explicitly requested.
+- Mark assumptions, known risks, and tradeoffs clearly in final reporting.
+
+### Imported architecture references
+
+Use these external architecture docs as design references when relevant:
+- `C:\Code\LendTechAI\Architecture\SYSTEM_ARCHITECTURE.md`
+- `C:\Code\LendTechAI\Architecture\ENTERPRISE_DESIGN_GUIDE.md`
+- `C:\Code\LendTechAI\Architecture\FRONTEND_UI_UX_DESIGN.md`
+- `C:\Code\LendTechAI\Architecture\THEME_SYSTEM.md`
+- `C:\Code\LendTechAI\Architecture\PWA_IMPLEMENTATION_COMPLETE.md`
+- `C:\Code\LendTechAI\Architecture\AZURE_APPINSIGHTS_SETUP.md`
+- `C:\Code\LendTechAI\Architecture\AZURE_STATIC_WEB_APPS_DEPLOYMENT.md`
+- `C:\Code\LendTechAI\Architecture\SECRETS_MANAGEMENT.md`
+
+### Mapping to this repository
+
+- Package manager: use `npm` (not `pnpm`).
+- Build/test tools: use Vite, Vitest, and Playwright from `cube-swipe/`.
+- This repo has no mandatory Cypress workflow.
+- Keep screenshot and PDF regeneration requirements from this repo's own E2E process.
+
 ## Repository Layout
 
 ```

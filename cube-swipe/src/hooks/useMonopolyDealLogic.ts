@@ -524,9 +524,21 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
           logState('AI paid debt', s)
           setGameState(s)
         } else {
-          // No cards to pay — just confirm with $0
-          const s = engineConfirmPayment(gameState)
-          logState('AI paid debt (empty)', s)
+          // Failsafe: if AI returns an invalid debt decision, pay everything to avoid deadlock.
+          // This should be rare because choosePayment() normally provides an exact subset.
+          const fallbackPaymentCardIds: string[] = []
+          for (const bankCard of gameState.ai.bank) fallbackPaymentCardIds.push(bankCard.id)
+          for (const propertyGroup of gameState.ai.field) {
+            for (const fieldCard of propertyGroup.cards) fallbackPaymentCardIds.push(fieldCard.id)
+            for (const buildingCard of propertyGroup.buildings) fallbackPaymentCardIds.push(buildingCard.id)
+          }
+
+          let s = gameState
+          for (const cardId of fallbackPaymentCardIds) {
+            s = engineTogglePayment(s, cardId)
+          }
+          s = engineConfirmPayment(s)
+          logState('AI paid debt (failsafe)', s)
           setGameState(s)
         }
       }, AI_ACTION_DELAY_MS)

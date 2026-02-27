@@ -92,6 +92,15 @@ async function advanceUntil(
   throw new Error(`Timed out waiting for ${label}`)
 }
 
+function mockAIDebtPayment(paymentCardIds: string[]): void {
+  vi.mocked(getAIDecision).mockImplementation((state) => {
+    if (state.turnPhase.type === 'awaitingPayment' && state.turnPhase.debt.debtor === 'ai') {
+      return { type: 'payDebt', paymentCardIds }
+    }
+    return { type: 'endTurn' }
+  })
+}
+
 describe('useMonopolyDealLogic', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -294,6 +303,43 @@ describe('useMonopolyDealLogic', () => {
     expect(vi.mocked(getAIDecision)).toHaveBeenCalled()
   })
 
+  it('falls back to paying all AI assets when debt decision is invalid', async () => {
+    const state = makeState({
+      currentTurn: 'player',
+      turnPhase: {
+        type: 'awaitingPayment',
+        debt: {
+          creditor: 'player',
+          debtor: 'ai',
+          amount: 3,
+          source: 'rent',
+          selectedPayment: [],
+        },
+      },
+      player: { hand: [], field: [], bank: [] },
+      ai: { hand: [], field: [], bank: [card('m-5a')] },
+    })
+    vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
+    vi.mocked(getAIDecision).mockReturnValue({ type: 'endTurn' })
+
+    const { result } = renderHook(() => useMonopolyDealLogic())
+
+    await act(async () => {
+      const resumed = await result.current.resumeGame()
+      expect(resumed).toBe(true)
+    })
+
+    await advanceUntil(
+      () => result.current.turnPhase.type === 'play' && result.current.playerBank.some((c) => c.id === 'm-5a'),
+      { maxMs: 2500, label: 'AI debt fallback payment to avoid deadlock' },
+    )
+
+    expect(result.current.currentTurn).toBe('player')
+    expect(result.current.turnPhase.type).toBe('play')
+    expect(result.current.playerBank.some((c) => c.id === 'm-5a')).toBe(true)
+    expect(result.current.aiBank).toHaveLength(0)
+  })
+
   it('selectRentColor plays rent card from hand path', async () => {
     const state = makeState({
       currentTurn: 'player',
@@ -310,6 +356,7 @@ describe('useMonopolyDealLogic', () => {
       },
     })
     vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
+    mockAIDebtPayment(['m-5a'])
 
     const { result } = renderHook(() => useMonopolyDealLogic())
     await act(async () => {
@@ -351,6 +398,7 @@ describe('useMonopolyDealLogic', () => {
       },
     })
     vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
+    mockAIDebtPayment(['m-5a'])
 
     const { result } = renderHook(() => useMonopolyDealLogic())
     await act(async () => {
@@ -392,6 +440,7 @@ describe('useMonopolyDealLogic', () => {
       },
     })
     vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
+    mockAIDebtPayment(['m-10'])
 
     const { result } = renderHook(() => useMonopolyDealLogic())
     await act(async () => {
@@ -491,6 +540,7 @@ describe('useMonopolyDealLogic', () => {
       },
     })
     vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
+    mockAIDebtPayment(['m-10'])
     const { result } = renderHook(() => useMonopolyDealLogic())
 
     await act(async () => {
@@ -537,6 +587,7 @@ describe('useMonopolyDealLogic', () => {
       },
     })
     vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
+    mockAIDebtPayment(['m-10'])
     const { result } = renderHook(() => useMonopolyDealLogic())
 
     await act(async () => {
