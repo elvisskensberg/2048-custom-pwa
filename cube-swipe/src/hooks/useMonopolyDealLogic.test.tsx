@@ -424,7 +424,43 @@ describe('useMonopolyDealLogic', () => {
     )
   })
 
-  it('playCard auto-selects highest rent color for wild rent', async () => {
+  it('playCard enters awaitingRentColor for wild rent instead of auto-selecting', async () => {
+    const state = makeState({
+      currentTurn: 'player',
+      turnPhase: { type: 'play', playsRemaining: 3 },
+      player: {
+        hand: [card('r-wild-1')],
+        field: [
+          group('brown', ['p-brown-1']),
+          group('red', ['p-red-1', 'p-red-2', 'p-red-3']),
+        ],
+        bank: [],
+      },
+      ai: {
+        hand: [],
+        field: [],
+        bank: [card('m-10')],
+      },
+    })
+    vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
+
+    const { result } = renderHook(() => useMonopolyDealLogic())
+    await act(async () => {
+      expect(await result.current.resumeGame()).toBe(true)
+    })
+
+    act(() => {
+      result.current.playCard('r-wild-1')
+    })
+
+    // Should enter color selection, NOT auto-charge
+    expect(result.current.turnPhase).toEqual({
+      type: 'awaitingRentColor',
+      cardId: 'r-wild-1',
+    })
+  })
+
+  it('wild rent full flow: play → select color → charge rent', async () => {
     const state = makeState({
       currentTurn: 'player',
       turnPhase: { type: 'play', playsRemaining: 3 },
@@ -452,6 +488,11 @@ describe('useMonopolyDealLogic', () => {
 
     act(() => {
       result.current.playCard('r-wild-1')
+    })
+    expect(result.current.turnPhase.type).toBe('awaitingRentColor')
+
+    act(() => {
+      result.current.selectRentColor('red')
     })
 
     expect(result.current.turnPhase.type).toBe('awaitingPayment')
@@ -523,7 +564,7 @@ describe('useMonopolyDealLogic', () => {
     })
   })
 
-  it('confirmDoubleRent auto-resolves wild rent with highest color', async () => {
+  it('confirmDoubleRent enters awaitingRentColor for wild rent with doubleRentCardId', async () => {
     const state = makeState({
       currentTurn: 'player',
       turnPhase: {
@@ -536,14 +577,8 @@ describe('useMonopolyDealLogic', () => {
         field: [group('red', ['p-red-1', 'p-red-2', 'p-red-3'])],
         bank: [],
       },
-      ai: {
-        hand: [],
-        field: [],
-        bank: [card('m-10')],
-      },
     })
     vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
-    mockAIDebtPayment(['m-10'])
     const { result } = renderHook(() => useMonopolyDealLogic())
 
     await act(async () => {
@@ -554,23 +589,14 @@ describe('useMonopolyDealLogic', () => {
       result.current.confirmDoubleRent()
     })
 
-    expect(result.current.turnPhase.type).toBe('awaitingPayment')
-    if (result.current.turnPhase.type === 'awaitingPayment') {
-      expect(result.current.turnPhase.debt.amount).toBe(12)
-      expect(result.current.turnPhase.debt.debtor).toBe('ai')
-    }
-    expect(result.current.playerHand.some((c) => c.id === 'r-wild-1')).toBe(false)
-    expect(result.current.playerHand.some((c) => c.id === 'a-dtr-1')).toBe(false)
-    expect(result.current.gameState?.discardPile.some((c) => c.id === 'r-wild-1')).toBe(true)
-    expect(result.current.gameState?.discardPile.some((c) => c.id === 'a-dtr-1')).toBe(true)
-
-    await advanceUntil(
-      () => result.current.turnPhase.type === 'play' && !result.current.isAIThinking,
-      { maxMs: 1500, label: 'double-rent wild payment auto-resolution' },
-    )
+    expect(result.current.turnPhase).toEqual({
+      type: 'awaitingRentColor',
+      cardId: 'r-wild-1',
+      doubleRentCardId: 'a-dtr-1',
+    })
   })
 
-  it('skipDoubleRent auto-resolves wild rent and keeps double-rent card in hand', async () => {
+  it('skipDoubleRent enters awaitingRentColor for wild rent without doubleRentCardId', async () => {
     const state = makeState({
       currentTurn: 'player',
       turnPhase: {
@@ -583,14 +609,8 @@ describe('useMonopolyDealLogic', () => {
         field: [group('red', ['p-red-1', 'p-red-2', 'p-red-3'])],
         bank: [],
       },
-      ai: {
-        hand: [],
-        field: [],
-        bank: [card('m-10')],
-      },
     })
     vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
-    mockAIDebtPayment(['m-10'])
     const { result } = renderHook(() => useMonopolyDealLogic())
 
     await act(async () => {
@@ -601,20 +621,10 @@ describe('useMonopolyDealLogic', () => {
       result.current.skipDoubleRent()
     })
 
-    expect(result.current.turnPhase.type).toBe('awaitingPayment')
-    if (result.current.turnPhase.type === 'awaitingPayment') {
-      expect(result.current.turnPhase.debt.amount).toBe(6)
-      expect(result.current.turnPhase.debt.debtor).toBe('ai')
-    }
-    expect(result.current.playerHand.some((c) => c.id === 'r-wild-1')).toBe(false)
-    expect(result.current.playerHand.some((c) => c.id === 'a-dtr-1')).toBe(true)
-    expect(result.current.gameState?.discardPile.some((c) => c.id === 'r-wild-1')).toBe(true)
-    expect(result.current.gameState?.discardPile.some((c) => c.id === 'a-dtr-1')).toBe(false)
-
-    await advanceUntil(
-      () => result.current.turnPhase.type === 'play' && !result.current.isAIThinking,
-      { maxMs: 1500, label: 'skip-double-rent wild payment auto-resolution' },
-    )
+    expect(result.current.turnPhase).toEqual({
+      type: 'awaitingRentColor',
+      cardId: 'r-wild-1',
+    })
   })
 
   it('cancelAction returns to play phase from modal phases', async () => {

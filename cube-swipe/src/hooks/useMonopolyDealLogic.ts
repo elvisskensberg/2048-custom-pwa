@@ -38,7 +38,6 @@ import {
   canPlayCard as engineCanPlayCard,
   checkWinCondition,
   getSelectedPaymentValue,
-  calculateRent,
   relocateWildOnField,
   getRelocatableWilds,
   relocateBuildingOnField,
@@ -142,38 +141,6 @@ function canAIAct(state: MonopolyDealState): boolean {
     default:
       return false
   }
-}
-
-function isWildRentCard(card: MonopolyCardData): boolean {
-  return card.type === 'rent' && !card.color && !card.color2
-}
-
-const RENT_COLORS: PropertyColor[] = [
-  'brown',
-  'lightBlue',
-  'pink',
-  'orange',
-  'red',
-  'yellow',
-  'green',
-  'darkBlue',
-  'railroad',
-  'utility',
-]
-
-function selectHighestRentColor(ps: PlayerState): PropertyColor {
-  let bestColor = RENT_COLORS[0]
-  let bestRent = -1
-
-  for (const color of RENT_COLORS) {
-    const rent = calculateRent(ps, color, false)
-    if (rent > bestRent) {
-      bestRent = rent
-      bestColor = color
-    }
-  }
-
-  return bestColor
 }
 
 /** Apply an AI decision to the game state, returning the new state. */
@@ -641,11 +608,8 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
             ...gameState,
             turnPhase: { type: 'awaitingDoubleRentConfirm', rentCardId: cardId, doubleRentCardId: doubleRent.id },
           })
-        } else if (isWildRentCard(card)) {
-          const bestColor = selectHighestRentColor(gameState.player)
-          const s = playRentCard(gameState, cardId, undefined, bestColor)
-          updateState(s)
         } else {
+          // Both wild rent and dual-color rent go to color selection
           updateState({
             ...gameState,
             turnPhase: { type: 'awaitingRentColor', cardId },
@@ -813,14 +777,6 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
     const { rentCardId, doubleRentCardId } = gameState.turnPhase
     logAction('Player', 'confirmDoubleRent', `${rentCardId} + ${doubleRentCardId}`)
 
-    const rentCard = gameState.player.hand.find((c) => c.id === rentCardId)
-    if (rentCard && isWildRentCard(rentCard)) {
-      const bestColor = selectHighestRentColor(gameState.player)
-      const s = playRentCard(gameState, rentCardId, doubleRentCardId, bestColor)
-      updateState(s)
-      return
-    }
-
     // Move to rent color selection with double rent attached
     updateState({
       ...gameState,
@@ -832,14 +788,6 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
     if (!gameState || gameState.turnPhase.type !== 'awaitingDoubleRentConfirm') return
     const { rentCardId } = gameState.turnPhase
     logAction('Player', 'skipDoubleRent', rentCardId)
-
-    const rentCard = gameState.player.hand.find((c) => c.id === rentCardId)
-    if (rentCard && isWildRentCard(rentCard)) {
-      const bestColor = selectHighestRentColor(gameState.player)
-      const s = playRentCard(gameState, rentCardId, undefined, bestColor)
-      updateState(s)
-      return
-    }
 
     // Move to rent color selection without double rent
     updateState({
