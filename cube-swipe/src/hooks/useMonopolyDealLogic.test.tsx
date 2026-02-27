@@ -73,6 +73,25 @@ function asSavedState(state: MonopolyDealState): string {
   return JSON.stringify(state)
 }
 
+async function advanceUntil(
+  predicate: () => boolean,
+  options?: { maxMs?: number; stepMs?: number; label?: string },
+): Promise<void> {
+  const maxMs = options?.maxMs ?? 4000
+  const stepMs = options?.stepMs ?? 40
+  const label = options?.label ?? 'condition'
+  const maxSteps = Math.ceil(maxMs / stepMs)
+
+  for (let step = 0; step <= maxSteps; step++) {
+    if (predicate()) return
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(stepMs)
+    })
+  }
+
+  throw new Error(`Timed out waiting for ${label}`)
+}
+
 describe('useMonopolyDealLogic', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -124,9 +143,10 @@ describe('useMonopolyDealLogic', () => {
       expect(resumed).toBe(true)
     })
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(4000)
-    })
+    await advanceUntil(
+      () => !result.current.isAIThinking && result.current.turnPhase.type === 'awaitingPayment',
+      { label: 'AI to remain paused on player-owned payment phase' },
+    )
 
     expect(result.current.currentTurn).toBe('ai')
     expect(result.current.turnPhase.type).toBe('awaitingPayment')
@@ -159,9 +179,10 @@ describe('useMonopolyDealLogic', () => {
       expect(resumed).toBe(true)
     })
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(4000)
-    })
+    await advanceUntil(
+      () => !result.current.isAIThinking && result.current.turnPhase.type === 'awaitingJSN',
+      { label: 'AI to remain paused on player-owned JSN phase' },
+    )
 
     expect(result.current.currentTurn).toBe('ai')
     expect(result.current.turnPhase.type).toBe('awaitingJSN')
@@ -188,9 +209,10 @@ describe('useMonopolyDealLogic', () => {
       expect(resumed).toBe(true)
     })
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(8000)
-    })
+    await advanceUntil(
+      () => result.current.currentTurn === 'player' && result.current.turnPhase.type === 'play',
+      { maxMs: 5000, label: 'AI draw->play flow to hand turn back' },
+    )
 
     expect(result.current.currentTurn).toBe('player')
     expect(result.current.turnPhase.type).toBe('play')
@@ -220,9 +242,10 @@ describe('useMonopolyDealLogic', () => {
       expect(resumed).toBe(true)
     })
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(6000)
-    })
+    await advanceUntil(
+      () => result.current.currentTurn === 'player' && result.current.turnPhase.type === 'play',
+      { maxMs: 4000, label: 'AI no-op guard flow to stop and hand back turn' },
+    )
 
     expect(result.current.currentTurn).toBe('player')
     expect(result.current.turnPhase.type).toBe('play')
@@ -259,9 +282,10 @@ describe('useMonopolyDealLogic', () => {
       expect(resumed).toBe(true)
     })
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2000)
-    })
+    await advanceUntil(
+      () => result.current.playerBank.some((c) => c.id === 'm-5a') && result.current.turnPhase.type === 'play',
+      { maxMs: 2500, label: 'AI debt auto-resolution on player turn' },
+    )
 
     expect(result.current.currentTurn).toBe('player')
     expect(result.current.turnPhase.type).toBe('play')
@@ -304,9 +328,10 @@ describe('useMonopolyDealLogic', () => {
       expect(result.current.turnPhase.debt.debtor).toBe('ai')
     }
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(500)
-    })
+    await advanceUntil(
+      () => result.current.turnPhase.type === 'play' && !result.current.isAIThinking,
+      { maxMs: 1500, label: 'rent payment auto-resolution (hand rent)' },
+    )
   })
 
   it('selectRentColor resolves via completeRentColor when card already in discard', async () => {
@@ -342,9 +367,10 @@ describe('useMonopolyDealLogic', () => {
       expect(result.current.turnPhase.debt.debtor).toBe('ai')
     }
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(500)
-    })
+    await advanceUntil(
+      () => result.current.turnPhase.type === 'play' && !result.current.isAIThinking,
+      { maxMs: 1500, label: 'rent payment auto-resolution (discard path)' },
+    )
   })
 
   it('playCard auto-selects highest rent color for wild rent', async () => {
@@ -384,9 +410,10 @@ describe('useMonopolyDealLogic', () => {
     expect(result.current.playerHand.some((c) => c.id === 'r-wild-1')).toBe(false)
     expect(result.current.gameState?.discardPile.some((c) => c.id === 'r-wild-1')).toBe(true)
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(500)
-    })
+    await advanceUntil(
+      () => result.current.turnPhase.type === 'play' && !result.current.isAIThinking,
+      { maxMs: 1500, label: 'rent payment auto-resolution (wild rent)' },
+    )
   })
 
   it('confirmDoubleRent keeps double-rent card id in rent-color phase for non-wild rent', async () => {
@@ -484,9 +511,10 @@ describe('useMonopolyDealLogic', () => {
     expect(result.current.gameState?.discardPile.some((c) => c.id === 'r-wild-1')).toBe(true)
     expect(result.current.gameState?.discardPile.some((c) => c.id === 'a-dtr-1')).toBe(true)
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(500)
-    })
+    await advanceUntil(
+      () => result.current.turnPhase.type === 'play' && !result.current.isAIThinking,
+      { maxMs: 1500, label: 'double-rent wild payment auto-resolution' },
+    )
   })
 
   it('skipDoubleRent auto-resolves wild rent and keeps double-rent card in hand', async () => {
@@ -529,9 +557,10 @@ describe('useMonopolyDealLogic', () => {
     expect(result.current.gameState?.discardPile.some((c) => c.id === 'r-wild-1')).toBe(true)
     expect(result.current.gameState?.discardPile.some((c) => c.id === 'a-dtr-1')).toBe(false)
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(500)
-    })
+    await advanceUntil(
+      () => result.current.turnPhase.type === 'play' && !result.current.isAIThinking,
+      { maxMs: 1500, label: 'skip-double-rent wild payment auto-resolution' },
+    )
   })
 
   it('cancelAction returns to play phase from modal phases', async () => {

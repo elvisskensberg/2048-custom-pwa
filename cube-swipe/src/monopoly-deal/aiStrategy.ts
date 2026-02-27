@@ -110,6 +110,20 @@ interface OpponentBehaviorModel {
   rentAggressionRate: number
   jsnUsageRate: number
   estimatedAggression: number
+  cardTypePosterior: {
+    dealBreakerRate: number
+    slyDealRate: number
+    forcedDealRate: number
+    debtCollectorRate: number
+    rentRate: number
+    passGoRate: number
+    birthdayRate: number
+  }
+  discardSignals: {
+    jsnDiscardRatio: number
+    rentDiscardRatio: number
+    disruptionDiscardRatio: number
+  }
 }
 
 interface DecisionContext {
@@ -128,6 +142,8 @@ export interface AITelemetrySnapshot {
   lookaheadDepth3Evaluations: number
   lookaheadNodesVisited: number
   lookaheadBudgetHits: number
+  lookaheadCacheHits: number
+  lookaheadCacheMisses: number
   lookaheadBonusTotal: number
   hiddenRiskPenaltyTotal: number
   paymentSearchCalls: number
@@ -222,6 +238,8 @@ const aiTelemetry: AITelemetrySnapshot = {
   lookaheadDepth3Evaluations: 0,
   lookaheadNodesVisited: 0,
   lookaheadBudgetHits: 0,
+  lookaheadCacheHits: 0,
+  lookaheadCacheMisses: 0,
   lookaheadBonusTotal: 0,
   hiddenRiskPenaltyTotal: 0,
   paymentSearchCalls: 0,
@@ -249,6 +267,8 @@ export function resetAITelemetry(): void {
   aiTelemetry.lookaheadDepth3Evaluations = 0
   aiTelemetry.lookaheadNodesVisited = 0
   aiTelemetry.lookaheadBudgetHits = 0
+  aiTelemetry.lookaheadCacheHits = 0
+  aiTelemetry.lookaheadCacheMisses = 0
   aiTelemetry.lookaheadBonusTotal = 0
   aiTelemetry.hiddenRiskPenaltyTotal = 0
   aiTelemetry.paymentSearchCalls = 0
@@ -352,6 +372,7 @@ function buildOpponentBehaviorModel(state: MonopolyDealState): OpponentBehaviorM
     .slice(-RECENT_OPPONENT_LOG_WINDOW)
 
   if (recentOpponentEntries.length === 0) {
+    const discardSignals = buildDiscardSignals(state.discardPile)
     return {
       observedActions: 0,
       disruptionRate: 0,
@@ -359,6 +380,16 @@ function buildOpponentBehaviorModel(state: MonopolyDealState): OpponentBehaviorM
       rentAggressionRate: 0,
       jsnUsageRate: 0,
       estimatedAggression: 0.35,
+      cardTypePosterior: {
+        dealBreakerRate: 0,
+        slyDealRate: 0,
+        forcedDealRate: 0,
+        debtCollectorRate: 0,
+        rentRate: 0,
+        passGoRate: 0,
+        birthdayRate: 0,
+      },
+      discardSignals,
     }
   }
 
@@ -366,9 +397,21 @@ function buildOpponentBehaviorModel(state: MonopolyDealState): OpponentBehaviorM
   let economy = 0
   let rentAggression = 0
   let jsnUsage = 0
+  let dealBreaker = 0
+  let slyDeal = 0
+  let forcedDeal = 0
+  let debtCollector = 0
+  let passGo = 0
+  let birthday = 0
 
   for (const entry of recentOpponentEntries) {
     const action = entry.action.toLowerCase()
+    if (action.includes('deal breaker')) dealBreaker++
+    if (action.includes('sly deal')) slyDeal++
+    if (action.includes('forced deal')) forcedDeal++
+    if (action.includes('debt collector')) debtCollector++
+    if (action.includes('pass go')) passGo++
+    if (action.includes("it's my birthday") || action.includes('birthday')) birthday++
     if (
       action.includes('deal breaker')
       || action.includes('forced deal')
@@ -387,11 +430,27 @@ function buildOpponentBehaviorModel(state: MonopolyDealState): OpponentBehaviorM
   const economyRate = economy / observed
   const rentAggressionRate = rentAggression / observed
   const jsnUsageRate = jsnUsage / observed
+  const cardTypePosterior = {
+    dealBreakerRate: dealBreaker / observed,
+    slyDealRate: slyDeal / observed,
+    forcedDealRate: forcedDeal / observed,
+    debtCollectorRate: debtCollector / observed,
+    rentRate: rentAggressionRate,
+    passGoRate: passGo / observed,
+    birthdayRate: birthday / observed,
+  }
+  const discardSignals = buildDiscardSignals(state.discardPile)
   const estimatedAggression = clamp(
     0.32
     + disruptionRate * 0.36
     + rentAggressionRate * 0.28
     + jsnUsageRate * 0.2
+    + cardTypePosterior.dealBreakerRate * 0.22
+    + cardTypePosterior.forcedDealRate * 0.18
+    + cardTypePosterior.slyDealRate * 0.14
+    + cardTypePosterior.debtCollectorRate * 0.1
+    - cardTypePosterior.passGoRate * 0.12
+    - cardTypePosterior.birthdayRate * 0.06
     - economyRate * 0.24,
     0.05,
     0.96,
@@ -404,6 +463,40 @@ function buildOpponentBehaviorModel(state: MonopolyDealState): OpponentBehaviorM
     rentAggressionRate,
     jsnUsageRate,
     estimatedAggression,
+    cardTypePosterior,
+    discardSignals,
+  }
+}
+
+function buildDiscardSignals(discardPile: MonopolyCardData[]): OpponentBehaviorModel['discardSignals'] {
+  if (discardPile.length === 0) {
+    return {
+      jsnDiscardRatio: 0,
+      rentDiscardRatio: 0,
+      disruptionDiscardRatio: 0,
+    }
+  }
+
+  let jsnDiscards = 0
+  let rentDiscards = 0
+  let disruptionDiscards = 0
+  for (const card of discardPile) {
+    if (card.name === 'Just Say No') jsnDiscards++
+    if (card.type === 'rent') rentDiscards++
+    if (
+      card.name === 'Deal Breaker'
+      || card.name === 'Sly Deal'
+      || card.name === 'Forced Deal'
+      || card.name === 'Debt Collector'
+    ) {
+      disruptionDiscards++
+    }
+  }
+
+  return {
+    jsnDiscardRatio: jsnDiscards / discardPile.length,
+    rentDiscardRatio: rentDiscards / discardPile.length,
+    disruptionDiscardRatio: disruptionDiscards / discardPile.length,
   }
 }
 
@@ -414,7 +507,15 @@ function applyOpponentTuning(base: ProfileWeights, model: OpponentBehaviorModel)
     1.35,
   )
   const hiddenRiskMultiplier = clamp(
-    1 + (model.jsnUsageRate * 0.35 + model.disruptionRate * 0.16 - model.economyRate * 0.12),
+    1 + (
+      model.jsnUsageRate * 0.35
+      + model.cardTypePosterior.dealBreakerRate * 0.2
+      + model.cardTypePosterior.forcedDealRate * 0.16
+      + model.cardTypePosterior.slyDealRate * 0.12
+      + model.disruptionRate * 0.16
+      - model.economyRate * 0.12
+      - model.discardSignals.disruptionDiscardRatio * 0.1
+    ),
     0.85,
     1.35,
   )
@@ -469,13 +570,39 @@ function buildHiddenInfoModel(state: MonopolyDealState, opponentModel: OpponentB
     remainingRentResponses,
     opponentHandCount,
   )
-  const behaviorJSNBias = 1 + opponentModel.jsnUsageRate * 0.45 + opponentModel.disruptionRate * 0.15 - opponentModel.economyRate * 0.12
-  const behaviorRentBias = 1 + opponentModel.rentAggressionRate * 0.4 + opponentModel.disruptionRate * 0.2 - opponentModel.economyRate * 0.08
+  const behaviorJSNBias = 1 + (
+    opponentModel.jsnUsageRate * 0.45
+    + opponentModel.cardTypePosterior.dealBreakerRate * 0.18
+    + opponentModel.cardTypePosterior.forcedDealRate * 0.12
+    + opponentModel.disruptionRate * 0.15
+    - opponentModel.economyRate * 0.12
+  )
+  const behaviorRentBias = 1 + (
+    opponentModel.rentAggressionRate * 0.4
+    + opponentModel.cardTypePosterior.rentRate * 0.2
+    + opponentModel.cardTypePosterior.debtCollectorRate * 0.15
+    + opponentModel.cardTypePosterior.birthdayRate * 0.08
+    + opponentModel.disruptionRate * 0.2
+    - opponentModel.economyRate * 0.08
+  )
+  const jsnDiscardPressure = clamp(1 - opponentModel.discardSignals.jsnDiscardRatio * 0.45, 0.55, 1.05)
+  const rentDiscardPressure = clamp(
+    1 - (
+      opponentModel.discardSignals.rentDiscardRatio * 0.22
+      + opponentModel.discardSignals.disruptionDiscardRatio * 0.08
+    ),
+    0.62,
+    1.08,
+  )
 
   return {
     opponentHandCount,
-    jsnProbability: clamp((jsnProbability + turnFactor * 0.25) * behaviorJSNBias, 0.03, 0.95),
-    rentResponseProbability: clamp((responseProbability + turnFactor * 0.2) * behaviorRentBias, 0.04, 0.92),
+    jsnProbability: clamp((jsnProbability + turnFactor * 0.25) * behaviorJSNBias * jsnDiscardPressure, 0.03, 0.95),
+    rentResponseProbability: clamp(
+      (responseProbability + turnFactor * 0.2) * behaviorRentBias * rentDiscardPressure,
+      0.04,
+      0.92,
+    ),
   }
 }
 
@@ -571,12 +698,21 @@ function choosePlay(
   let bestScore = Number.NEGATIVE_INFINITY
   let bestLookaheadBonus = 0
   let bestRiskPenalty = 0
+  const lookaheadCache: LookaheadCache = new Map()
 
   function consider(play: ScoredPlay | null): void {
     if (!play) return
     const riskPenalty = getHiddenInfoRiskPenalty(play, context)
     const lookaheadBonus = play.meta?.highImpact
-      ? getHighImpactTwoPlyBonus(state, play, aiMetrics, opponentMetrics, playsRemaining, context)
+      ? getHighImpactTwoPlyBonus(
+        state,
+        play,
+        aiMetrics,
+        opponentMetrics,
+        playsRemaining,
+        context,
+        lookaheadCache,
+      )
       : 0
     const adjustedScore = play.score - riskPenalty + lookaheadBonus
 
@@ -1422,6 +1558,14 @@ interface LookaheadChoice {
   playCost: number
 }
 
+interface LookaheadCacheEntry {
+  score: number
+  cardId?: string
+  playCost: number
+}
+
+type LookaheadCache = Map<string, LookaheadCacheEntry>
+
 function getHighImpactTwoPlyBonus(
   state: MonopolyDealState,
   play: ScoredPlay,
@@ -1429,6 +1573,7 @@ function getHighImpactTwoPlyBonus(
   opponentMetrics: FieldMetrics,
   playsRemaining: number,
   context: DecisionContext,
+  cache: LookaheadCache,
 ): number {
   const cardId = play.meta?.sourceCardId ?? play.decision.cardId
   if (!cardId) return 0
@@ -1449,7 +1594,7 @@ function getHighImpactTwoPlyBonus(
   const excludedCardIds = new Set<string>([cardId])
   if (play.decision.doubleRentCardId) excludedCardIds.add(play.decision.doubleRentCardId)
 
-  const followUp = estimateBestFollowUp(state, snapshot, excludedCardIds, remainingPlays, context, budget)
+  const followUp = estimateBestFollowUp(state, snapshot, excludedCardIds, remainingPlays, context, budget, cache)
   let bonus = followUp.score * context.weights.lookaheadWeight
 
   const nextRemainingPlays = remainingPlays - followUp.playCost
@@ -1468,6 +1613,7 @@ function getHighImpactTwoPlyBonus(
       nextRemainingPlays,
       context,
       budget,
+      cache,
     )
     bonus += thirdPly.score * context.weights.lookaheadWeight * 0.42
   }
@@ -1768,9 +1914,22 @@ function estimateBestFollowUp(
   remainingPlays: number,
   context: DecisionContext,
   budget: LookaheadBudget,
+  cache: LookaheadCache,
 ): LookaheadChoice {
   const remainingHand = state.ai.hand.filter((card) => !excludedCardIds.has(card.id))
   if (remainingHand.length === 0 || remainingPlays <= 0) return { score: 0, playCost: 0 }
+
+  const cacheKey = buildLookaheadCacheKey(state.ai.hand, snapshot, excludedCardIds, remainingPlays)
+  const cached = cache.get(cacheKey)
+  if (cached) {
+    aiTelemetry.lookaheadCacheHits++
+    return {
+      score: cached.score,
+      card: cached.cardId ? remainingHand.find((c) => c.id === cached.cardId) : undefined,
+      playCost: cached.playCost,
+    }
+  }
+  aiTelemetry.lookaheadCacheMisses++
 
   const hasDoubleRent = remainingHand.some((card) => card.name === 'Double Rent')
   let bestScore = 0
@@ -1821,11 +1980,56 @@ function estimateBestFollowUp(
     }
   }
 
-  return {
+  const result: LookaheadChoice = {
     score: bestScore,
     card: bestCard,
     playCost: bestPlayCost,
   }
+  cache.set(cacheKey, {
+    score: result.score,
+    cardId: result.card?.id,
+    playCost: result.playCost,
+  })
+  return result
+}
+
+function buildLookaheadCacheKey(
+  hand: MonopolyCardData[],
+  snapshot: LookaheadSnapshot,
+  excludedCardIds: Set<string>,
+  remainingPlays: number,
+): string {
+  const cardById = new Map(hand.map((card) => [card.id, card]))
+  const excluded = [...excludedCardIds]
+    .map((id) => cardFingerprint(cardById.get(id), id))
+    .sort()
+    .join(',')
+  return [
+    remainingPlays,
+    snapshot.aiCompleteSets,
+    snapshot.opponentCompleteSets,
+    Math.round(snapshot.opponentTotalValue * 10),
+    serializeMetricsForCache(snapshot.aiMetrics),
+    serializeMetricsForCache(snapshot.opponentMetrics),
+    excluded,
+  ].join('|')
+}
+
+function cardFingerprint(card: MonopolyCardData | undefined, fallbackId: string): string {
+  if (!card) return fallbackId
+  return [
+    card.type,
+    card.name,
+    card.value,
+    card.color ?? '-',
+    card.color2 ?? '-',
+  ].join(':')
+}
+
+function serializeMetricsForCache(metrics: FieldMetrics): string {
+  return PROPERTY_COLORS
+    .map((color) => `${metrics[color].cardCount}:${Math.round(metrics[color].rent * 10)}`)
+    .join(';')
 }
 
 function tryConsumeLookaheadNode(budget: LookaheadBudget): boolean {

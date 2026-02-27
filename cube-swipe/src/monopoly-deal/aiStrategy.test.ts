@@ -1243,6 +1243,53 @@ describe('aiStrategy', () => {
       expect(decisionA).toEqual(decisionB)
     })
 
+    it('uses discard-derived posterior to reduce hidden JSN pressure as responses are exhausted', () => {
+      const aggressiveLogs = [
+        { turn: 1, player: 'player' as const, action: 'Played Deal Breaker!', timestamp: 1 },
+        { turn: 2, player: 'player' as const, action: 'Played Just Say No!', timestamp: 2 },
+        { turn: 3, player: 'player' as const, action: 'Played Forced Deal', timestamp: 3 },
+        { turn: 4, player: 'player' as const, action: 'Charged M6M rent for red', timestamp: 4 },
+      ]
+      const baseline = makeState({
+        ai: {
+          hand: [card('r-wild-1')],
+          field: [group('red', ['p-red-1', 'p-red-2', 'p-red-3'])],
+          bank: [],
+        },
+        player: {
+          hand: [
+            card('m-1a', 'h1'),
+            card('m-1b', 'h2'),
+            card('m-1c', 'h3'),
+            card('m-1d', 'h4'),
+          ],
+          field: [],
+          bank: [card('m-10')],
+        },
+        log: aggressiveLogs,
+      })
+      getAIDecision(baseline)
+      const baselinePenalty = getAITelemetrySnapshot().hiddenRiskPenaltyTotal
+      expect(baselinePenalty).toBeGreaterThan(0)
+
+      resetAITelemetry()
+      const exhausted = makeState({
+        ...baseline,
+        discardPile: [
+          card('a-jsn-1'),
+          card('a-jsn-2'),
+          card('a-jsn-3'),
+          card('a-db-1'),
+          card('a-db-2'),
+          card('r-wild-1', 'd-rent-1'),
+          card('r-wild-2', 'd-rent-2'),
+        ],
+      })
+      getAIDecision(exhausted)
+      const exhaustedPenalty = getAITelemetrySnapshot().hiddenRiskPenaltyTotal
+      expect(exhaustedPenalty).toBeLessThan(baselinePenalty)
+    })
+
     it('uses exact minimal-overpay subset for debt payment', () => {
       const state = makeState({
         turnPhase: {
@@ -1387,6 +1434,7 @@ describe('aiStrategy', () => {
       setAIDifficultyMode('aggressive')
       const oversizedHand = [
         card('a-db-1'),
+        card('a-db-2'),
         ...Array.from({ length: 45 }, (_, i) => card('m-1a', `ai-m-${i}`)),
       ]
       const state = makeState({
@@ -1409,6 +1457,8 @@ describe('aiStrategy', () => {
       const telemetry = getAITelemetrySnapshot()
       expect(telemetry.lookaheadBudgetHits).toBeGreaterThan(0)
       expect(telemetry.lookaheadNodesVisited).toBeGreaterThan(0)
+      expect(telemetry.lookaheadCacheMisses).toBeGreaterThan(0)
+      expect(telemetry.lookaheadCacheHits).toBeGreaterThan(0)
     })
 
     it('evaluates building/rent/action follow-ups in lookahead and discard building usability callback', () => {

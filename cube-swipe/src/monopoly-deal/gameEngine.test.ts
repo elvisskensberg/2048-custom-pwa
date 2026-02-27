@@ -48,11 +48,13 @@ import {
 } from './gameEngine'
 import {
   type MonopolyCardData,
+  type PropertyColor,
   PROPERTY_CARDS,
   ACTION_CARDS,
   MONEY_CARDS,
   BUILDING_CARDS,
   WILD_CARDS,
+  RENT_CARDS,
   SET_SIZE,
 } from './cardData'
 
@@ -77,14 +79,14 @@ function makeState(overrides?: Partial<MonopolyDealState>): MonopolyDealState {
 }
 
 function findCard(name: string): MonopolyCardData {
-  const card = [...PROPERTY_CARDS, ...ACTION_CARDS, ...MONEY_CARDS, ...BUILDING_CARDS]
+  const card = [...PROPERTY_CARDS, ...ACTION_CARDS, ...MONEY_CARDS, ...BUILDING_CARDS, ...WILD_CARDS, ...RENT_CARDS]
     .find((c) => c.name === name)
   if (!card) throw new Error(`Card not found: ${name}`)
   return card
 }
 
 function findCardById(id: string): MonopolyCardData {
-  const card = [...PROPERTY_CARDS, ...ACTION_CARDS, ...MONEY_CARDS, ...BUILDING_CARDS]
+  const card = [...PROPERTY_CARDS, ...ACTION_CARDS, ...MONEY_CARDS, ...BUILDING_CARDS, ...WILD_CARDS, ...RENT_CARDS]
     .find((c) => c.id === id)
   if (!card) throw new Error(`Card not found by id: ${id}`)
   return card
@@ -902,6 +904,82 @@ describe('gameEngine', () => {
         const next = confirmPayment(state)
         expectCardConservation(state, next)
         expectNoDuplicateCardIds(next)
+      }
+    })
+
+    it('maintains card conservation and uniqueness across randomized play operations', () => {
+      const random = createSeededRandom(20480315)
+      const handPool = [
+        'p-red-1', 'p-red-2', 'p-red-3',
+        'p-lb-1', 'p-lb-2', 'p-lb-3',
+        'p-db-1', 'p-db-2',
+        'm-1a', 'm-2a', 'm-3a', 'm-5a',
+        'a-pg-1', 'a-pg-2',
+        'w-br-lb', 'w-rainbow-1',
+        'b-house-1', 'b-hotel-1',
+      ]
+      const drawPool = [
+        'm-1b', 'm-1c', 'm-2b', 'm-4a',
+        'a-pg-3', 'a-pg-4', 'w-rainbow-2',
+        'p-ora-1', 'p-ora-2', 'p-ora-3',
+      ]
+      const buildTargets: PropertyColor[] = ['brown', 'red', 'lightBlue', 'darkBlue']
+
+      for (let trial = 0; trial < 30; trial++) {
+        const handIds = pickUnique(handPool, 6 + Math.floor(random() * 4), random)
+        const drawIds = pickUnique(drawPool, 4 + Math.floor(random() * 3), random)
+        let state = makeState({
+          currentTurn: 'player',
+          turnPhase: { type: 'play', playsRemaining: 3 },
+          drawPile: drawIds.map(findCardById),
+          player: {
+            hand: handIds.map(findCardById),
+            bank: [findCardById('m-1f')],
+            field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])],
+          },
+        })
+
+        expectNoDuplicateCardIds(state)
+
+        for (let step = 0; step < 20; step++) {
+          const before = state
+          const hand = before.player.hand
+          const op = Math.floor(random() * 4)
+          let next = before
+
+          if (op === 0 && hand.length > 0) {
+            const selected = hand[Math.floor(random() * hand.length)]
+            next = bankCard(before, selected.id)
+          } else if (op === 1) {
+            const propertyCandidates = hand.filter((c) => c.type === 'property' || c.type === 'wild')
+            if (propertyCandidates.length > 0) {
+              const selected = propertyCandidates[Math.floor(random() * propertyCandidates.length)]
+              let targetColor: PropertyColor = 'brown'
+              if (selected.type === 'property' && selected.color) {
+                targetColor = selected.color
+              } else if (selected.color && selected.color2) {
+                targetColor = random() < 0.5 ? selected.color : selected.color2
+              } else if (selected.color) {
+                targetColor = selected.color
+              }
+              next = playPropertyToField(before, selected.id, targetColor)
+            }
+          } else if (op === 2) {
+            const buildingCandidates = hand.filter((c) => c.type === 'building')
+            if (buildingCandidates.length > 0) {
+              const selected = buildingCandidates[Math.floor(random() * buildingCandidates.length)]
+              const targetColor = buildTargets[Math.floor(random() * buildTargets.length)]
+              next = playBuilding(before, selected.id, targetColor)
+            }
+          } else if (op === 3) {
+            const passGo = hand.find((c) => c.name === 'Pass Go')
+            if (passGo) next = playPassGo(before, passGo.id)
+          }
+
+          expectCardConservation(before, next)
+          expectNoDuplicateCardIds(next)
+          state = next
+        }
       }
     })
   })

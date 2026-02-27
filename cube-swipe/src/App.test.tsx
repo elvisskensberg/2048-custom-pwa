@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import App from './App'
 
 vi.mock('./components/GameBoard', () => ({
@@ -27,30 +28,32 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /About/i })).toBeInTheDocument()
   }, 15000)
 
-  it('navigates between menu, mode select, and game view via user actions', () => {
+  it('navigates between menu, mode select, and game view via user actions', async () => {
+    const user = userEvent.setup()
     render(<App />)
 
-    fireEvent.click(screen.getByRole('button', { name: /Play 2048/i }))
+    await user.click(screen.getByRole('button', { name: /Play 2048/i }))
     expect(screen.getByRole('button', { name: /Play Original 2048/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Play Using Fibonacci Sequence/i })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /Play Original 2048/i }))
+    await user.click(screen.getByRole('button', { name: /Play Original 2048/i }))
     expect(screen.getByText(/Game board: classic/i)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /Back/i }))
+    await user.click(screen.getByRole('button', { name: /Back/i }))
     expect(screen.getByRole('button', { name: /Play Original 2048/i })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /Back/i }))
+    await user.click(screen.getByRole('button', { name: /Back/i }))
     expect(screen.getByRole('button', { name: /Play 2048/i })).toBeInTheDocument()
   }, 15000)
 
-  it('opens Monopoly Deal and returns to menu', () => {
+  it('opens Monopoly Deal and returns to menu', async () => {
+    const user = userEvent.setup()
     render(<App />)
 
-    fireEvent.click(screen.getByRole('button', { name: /Monopoly Deal/i }))
+    await user.click(screen.getByRole('button', { name: /Monopoly Deal/i }))
     expect(screen.getByText(/Monopoly Deal Mock/i)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /Back to Menu/i }))
+    await user.click(screen.getByRole('button', { name: /Back to Menu/i }))
     expect(screen.getByRole('button', { name: /Play 2048/i })).toBeInTheDocument()
   }, 15000)
 })
