@@ -63,6 +63,7 @@ interface ScoredPlay {
     sourceCardId?: string
     sourceCardName?: string
     expectedRent?: number
+    nominalRent?: number
     highImpact?: boolean
     hiddenRiskSensitive?: boolean
     appliedRiskPenalty?: number
@@ -101,6 +102,13 @@ interface HiddenInfoModel {
   opponentHandCount: number
   jsnProbability: number
   rentResponseProbability: number
+  dealBreakerResponseProbability: number
+  forcedDealResponseProbability: number
+  slyDealResponseProbability: number
+  genericActionResponseProbability: number
+  largeRentResponseProbability: number
+  smallRentResponseProbability: number
+  cashFirstDebtPaymentProbability: number
 }
 
 interface OpponentBehaviorModel {
@@ -170,9 +178,11 @@ const PROPERTY_COLORS: PropertyColor[] = [
 
 const MIN_PLAY_SCORE = 6
 const RECENT_OPPONENT_LOG_WINDOW = 16
+const RECENT_OPPONENT_DECAY = 0.86
 const LOOKAHEAD_NODE_BUDGET_BASE = 18
 const LOOKAHEAD_NODE_BUDGET_NEAR_LETHAL = 30
 const SLOW_DECISION_THRESHOLD_MS = 10
+const BLOCKED_TOPLINE_ACTION_SCORE = 8
 const TOTAL_JSN_CARDS = ACTION_CARDS.filter((card) => card.name === 'Just Say No').length
 const TOTAL_DECK_CARDS = (
   PROPERTY_CARDS.length
@@ -343,7 +353,9 @@ export function getAIDecision(state: MonopolyDealState): AIDecision {
 function buildDecisionContext(state: MonopolyDealState): DecisionContext {
   const opponentModel = buildOpponentBehaviorModel(state)
   const resolvedProfile = resolveProfile(state, opponentModel)
-  const tunedWeights = applyOpponentTuning(PROFILE_WEIGHTS[resolvedProfile], opponentModel)
+  const tunedByOpponent = applyOpponentTuning(PROFILE_WEIGHTS[resolvedProfile], opponentModel)
+  const tunedByRace = applyWinRaceTuning(tunedByOpponent, state, opponentModel)
+  const tunedWeights = applyTelemetryCalibration(tunedByRace, resolvedProfile)
   return {
     mode: configuredMode,
     resolvedProfile,
@@ -403,41 +415,47 @@ function buildOpponentBehaviorModel(state: MonopolyDealState): OpponentBehaviorM
   let debtCollector = 0
   let passGo = 0
   let birthday = 0
+  let totalWeight = 0
 
-  for (const entry of recentOpponentEntries) {
+  for (let i = 0; i < recentOpponentEntries.length; i++) {
+    const entry = recentOpponentEntries[i]
+    const age = recentOpponentEntries.length - 1 - i
+    const weight = Math.pow(RECENT_OPPONENT_DECAY, age)
+    totalWeight += weight
     const action = entry.action.toLowerCase()
-    if (action.includes('deal breaker')) dealBreaker++
-    if (action.includes('sly deal')) slyDeal++
-    if (action.includes('forced deal')) forcedDeal++
-    if (action.includes('debt collector')) debtCollector++
-    if (action.includes('pass go')) passGo++
-    if (action.includes("it's my birthday") || action.includes('birthday')) birthday++
+    if (action.includes('deal breaker')) dealBreaker += weight
+    if (action.includes('sly deal')) slyDeal += weight
+    if (action.includes('forced deal')) forcedDeal += weight
+    if (action.includes('debt collector')) debtCollector += weight
+    if (action.includes('pass go')) passGo += weight
+    if (action.includes("it's my birthday") || action.includes('birthday')) birthday += weight
     if (
       action.includes('deal breaker')
       || action.includes('forced deal')
       || action.includes('sly deal')
       || action.includes('debt collector')
     ) {
-      disruption++
+      disruption += weight
     }
-    if (action.includes('charged m') && action.includes('rent')) rentAggression++
-    if (action.includes('just say no')) jsnUsage++
-    if (action.includes('banked') || action.includes('drew') || action.includes('pass go')) economy++
+    if (action.includes('charged m') && action.includes('rent')) rentAggression += weight
+    if (action.includes('just say no')) jsnUsage += weight
+    if (action.includes('banked') || action.includes('drew') || action.includes('pass go')) economy += weight
   }
 
+  const observedWeight = Math.max(1e-6, totalWeight)
   const observed = recentOpponentEntries.length
-  const disruptionRate = disruption / observed
-  const economyRate = economy / observed
-  const rentAggressionRate = rentAggression / observed
-  const jsnUsageRate = jsnUsage / observed
+  const disruptionRate = disruption / observedWeight
+  const economyRate = economy / observedWeight
+  const rentAggressionRate = rentAggression / observedWeight
+  const jsnUsageRate = jsnUsage / observedWeight
   const cardTypePosterior = {
-    dealBreakerRate: dealBreaker / observed,
-    slyDealRate: slyDeal / observed,
-    forcedDealRate: forcedDeal / observed,
-    debtCollectorRate: debtCollector / observed,
+    dealBreakerRate: dealBreaker / observedWeight,
+    slyDealRate: slyDeal / observedWeight,
+    forcedDealRate: forcedDeal / observedWeight,
+    debtCollectorRate: debtCollector / observedWeight,
     rentRate: rentAggressionRate,
-    passGoRate: passGo / observed,
-    birthdayRate: birthday / observed,
+    passGoRate: passGo / observedWeight,
+    birthdayRate: birthday / observedWeight,
   }
   const discardSignals = buildDiscardSignals(state.discardPile)
   const estimatedAggression = clamp(
@@ -550,6 +568,92 @@ function applyOpponentTuning(base: ProfileWeights, model: OpponentBehaviorModel)
   }
 }
 
+function applyWinRaceTuning(
+  base: ProfileWeights,
+  state: MonopolyDealState,
+  model: OpponentBehaviorModel,
+): ProfileWeights {
+  const aiSets = countCompleteSets(state.ai)
+  const opponentSets = countCompleteSets(state.player)
+  const aiSetsToWin = Math.max(0, 3 - aiSets)
+  const opponentSetsToWin = Math.max(0, 3 - opponentSets)
+  const aiBankValue = getBankValue(state.ai.bank)
+  const opponentBankValue = getBankValue(state.player.bank)
+
+  const bankFragility = clamp((5 - aiBankValue) / 5, 0, 1)
+  const opponentRacePressure = clamp(
+    (opponentSetsToWin <= 1 ? 0.46 : opponentSetsToWin === 2 ? 0.2 : 0)
+    + bankFragility * 0.28
+    + model.estimatedAggression * 0.14,
+    0,
+    0.9,
+  )
+  const closingEdge = clamp(
+    (opponentSetsToWin - aiSetsToWin) * 0.2 + (aiBankValue - opponentBankValue) / 18,
+    -0.6,
+    0.7,
+  )
+
+  return {
+    ...base,
+    minPlayScore: clamp(
+      base.minPlayScore - opponentRacePressure * 2.8 - closingEdge * 1.5,
+      0,
+      12,
+    ),
+    threatSensitivity: clamp(
+      base.threatSensitivity * (1 + opponentRacePressure * 0.38 - closingEdge * 0.15),
+      0.7,
+      1.9,
+    ),
+    hiddenRiskWeight: clamp(
+      base.hiddenRiskWeight * (1 + opponentRacePressure * 0.24 - closingEdge * 0.08),
+      0.6,
+      2,
+    ),
+    aggressionScale: clamp(
+      base.aggressionScale * (1 + closingEdge * 0.22 + (aiSetsToWin <= 1 ? 0.1 : 0)),
+      0.8,
+      1.45,
+    ),
+    defenseScale: clamp(
+      base.defenseScale * (1 + opponentRacePressure * 0.34 - closingEdge * 0.1),
+      0.8,
+      1.5,
+    ),
+  }
+}
+
+function applyTelemetryCalibration(base: ProfileWeights, profile: ResolvedProfile): ProfileWeights {
+  if (aiTelemetry.totalDecisions < 25) return base
+  if (aiTelemetry.byProfile[profile] < 6) return base
+
+  const avgDecisionMs = aiTelemetry.totalDecisionMs / Math.max(1, aiTelemetry.totalDecisions)
+  const avgLookaheadBonus = aiTelemetry.lookaheadBonusTotal / Math.max(1, aiTelemetry.lookaheadEvaluations)
+  const avgRiskPenalty = aiTelemetry.hiddenRiskPenaltyTotal / Math.max(1, aiTelemetry.lookaheadEvaluations)
+  const slowRatio = aiTelemetry.slowDecisions / Math.max(1, aiTelemetry.totalDecisions)
+
+  let lookaheadWeight = base.lookaheadWeight
+  let hiddenRiskWeight = base.hiddenRiskWeight
+
+  if (avgDecisionMs > 8 || slowRatio > 0.2) {
+    lookaheadWeight *= 0.94
+  }
+  if (avgLookaheadBonus > avgRiskPenalty * 1.3) {
+    lookaheadWeight *= 1.04
+    hiddenRiskWeight *= 0.97
+  }
+  if (avgRiskPenalty > avgLookaheadBonus * 1.3) {
+    hiddenRiskWeight *= 1.03
+  }
+
+  return {
+    ...base,
+    lookaheadWeight: clamp(lookaheadWeight, 0.16, 0.46),
+    hiddenRiskWeight: clamp(hiddenRiskWeight, 0.55, 2.1),
+  }
+}
+
 function buildHiddenInfoModel(state: MonopolyDealState, opponentModel: OpponentBehaviorModel): HiddenInfoModel {
   const opponentHandCount = state.player.hand.length
   const visibleKnown = collectVisibleKnownCards(state)
@@ -595,14 +699,88 @@ function buildHiddenInfoModel(state: MonopolyDealState, opponentModel: OpponentB
     1.08,
   )
 
+  const baseJSNProbability = clamp(
+    (jsnProbability + turnFactor * 0.25) * behaviorJSNBias * jsnDiscardPressure,
+    0.03,
+    0.95,
+  )
+  const baseRentResponseProbability = clamp(
+    (responseProbability + turnFactor * 0.2) * behaviorRentBias * rentDiscardPressure,
+    0.04,
+    0.92,
+  )
+  const dealBreakerResponseProbability = clamp(
+    baseJSNProbability * (
+      1.2
+      + opponentModel.cardTypePosterior.dealBreakerRate * 0.4
+      + opponentModel.jsnUsageRate * 0.2
+      - opponentModel.discardSignals.jsnDiscardRatio * 0.08
+    ),
+    0.04,
+    0.97,
+  )
+  const forcedDealResponseProbability = clamp(
+    baseJSNProbability * (
+      1.05
+      + opponentModel.cardTypePosterior.forcedDealRate * 0.26
+      + opponentModel.jsnUsageRate * 0.1
+    ),
+    0.04,
+    0.95,
+  )
+  const slyDealResponseProbability = clamp(
+    baseJSNProbability * (
+      0.94
+      + opponentModel.cardTypePosterior.slyDealRate * 0.24
+      + opponentModel.jsnUsageRate * 0.06
+    ),
+    0.03,
+    0.93,
+  )
+  const genericActionResponseProbability = clamp(
+    baseJSNProbability * (0.84 + opponentModel.jsnUsageRate * 0.14),
+    0.03,
+    0.9,
+  )
+  const largeRentResponseProbability = clamp(
+    baseRentResponseProbability * (
+      1.14
+      + opponentModel.rentAggressionRate * 0.1
+      + opponentModel.cardTypePosterior.rentRate * 0.08
+    ),
+    0.05,
+    0.96,
+  )
+  const smallRentResponseProbability = clamp(
+    baseRentResponseProbability * (
+      0.82
+      + opponentModel.economyRate * 0.1
+      - opponentModel.rentAggressionRate * 0.04
+    ),
+    0.03,
+    0.9,
+  )
+  const cashFirstDebtPaymentProbability = clamp(
+    0.5
+      + opponentModel.economyRate * 0.34
+      + opponentModel.cardTypePosterior.passGoRate * 0.08
+      - opponentModel.disruptionRate * 0.18
+      - opponentModel.cardTypePosterior.debtCollectorRate * 0.08,
+    0.2,
+    0.9,
+  )
+
   return {
     opponentHandCount,
-    jsnProbability: clamp((jsnProbability + turnFactor * 0.25) * behaviorJSNBias * jsnDiscardPressure, 0.03, 0.95),
-    rentResponseProbability: clamp(
-      (responseProbability + turnFactor * 0.2) * behaviorRentBias * rentDiscardPressure,
-      0.04,
-      0.92,
-    ),
+    jsnProbability: baseJSNProbability,
+    rentResponseProbability: baseRentResponseProbability,
+    dealBreakerResponseProbability,
+    forcedDealResponseProbability,
+    slyDealResponseProbability,
+    genericActionResponseProbability,
+    largeRentResponseProbability,
+    smallRentResponseProbability,
+    cashFirstDebtPaymentProbability,
   }
 }
 
@@ -648,6 +826,12 @@ function countRentResponseCards(cards: MonopolyCardData[]): number {
   return total
 }
 
+function getBankValue(bank: MonopolyCardData[]): number {
+  let total = 0
+  for (const card of bank) total += card.value
+  return total
+}
+
 function probabilityAtLeastOneInHand(
   poolSizeRaw: number,
   successRaw: number,
@@ -673,6 +857,41 @@ function probabilityAtLeastOneInHand(
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
+}
+
+function expectedValueByResponseBranch(
+  successValue: number,
+  blockedValue: number,
+  responseProbabilityRaw: number,
+): number {
+  const responseProbability = clamp(responseProbabilityRaw, 0, 1)
+  const successProbability = 1 - responseProbability
+  return successValue * successProbability + blockedValue * responseProbability
+}
+
+function getActionResponseProbabilityByCardName(cardName: string, hidden: HiddenInfoModel): number {
+  switch (cardName) {
+    case 'Deal Breaker':
+      return hidden.dealBreakerResponseProbability
+    case 'Forced Deal':
+      return hidden.forcedDealResponseProbability
+    case 'Sly Deal':
+      return hidden.slyDealResponseProbability
+    default:
+      return hidden.genericActionResponseProbability
+  }
+}
+
+function getRentResponseProbabilityForAmount(hidden: HiddenInfoModel, nominalRentRaw: number): number {
+  const nominalRent = Math.max(0, nominalRentRaw)
+  if (nominalRent <= 3) return hidden.smallRentResponseProbability
+  if (nominalRent >= 6) return hidden.largeRentResponseProbability
+  const t = (nominalRent - 3) / 3
+  return clamp(
+    hidden.smallRentResponseProbability * (1 - t) + hidden.largeRentResponseProbability * t,
+    0,
+    1,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -741,14 +960,14 @@ function choosePlay(
           const color = pickBestWildColor(aiMetrics, card.color, card.color2)
           consider({
             decision: { type: 'playProperty', cardId: card.id, targetColor: color },
-            score: scorePropertyPlay(aiMetrics, card, color, aiCompleteSets) + 3,
+            score: scorePropertyPlay(aiMetrics, card, color, aiCompleteSets) + 12,
           })
         } else {
           const color = pickBestRainbowColor(aiMetrics)
           if (color) {
             consider({
               decision: { type: 'playProperty', cardId: card.id, targetColor: color },
-              score: scorePropertyPlay(aiMetrics, card, color, aiCompleteSets) + 6,
+              score: scorePropertyPlay(aiMetrics, card, color, aiCompleteSets) + 18,
             })
           }
         }
@@ -864,10 +1083,14 @@ function scoreRentPlay(
 
   if (!bestColor || bestRent < 1) return null
 
-  const expectedRent = bestRent * (1 - context.hidden.jsnProbability * 0.6 * context.weights.hiddenRiskWeight)
-  const highImpactRent = expectedRent >= context.weights.largeRentThreshold
+  const singleRentResponseProbability = getRentResponseProbabilityForAmount(context.hidden, bestRent)
+  const expectedSingleRent = expectedValueByResponseBranch(bestRent, 0, singleRentResponseProbability)
+  const highImpactRent = bestRent >= context.weights.largeRentThreshold || expectedSingleRent >= context.weights.largeRentThreshold
   const doubleRent = ai.hand.find((c) => c.name === 'Double Rent')
   if (doubleRent && playsRemaining >= 2 && bestRent >= 2) {
+    const nominalDoubleRent = Math.min(bestRent * 2, maxCollectable)
+    const doubleRentResponseProbability = getRentResponseProbabilityForAmount(context.hidden, nominalDoubleRent)
+    const expectedDoubleRent = expectedValueByResponseBranch(nominalDoubleRent, 0, doubleRentResponseProbability)
     return {
       decision: {
         type: 'playRent',
@@ -875,12 +1098,13 @@ function scoreRentPlay(
         targetColor: bestColor,
         doubleRentCardId: doubleRent.id,
       },
-      score: (84 + expectedRent * 8) * context.weights.aggressionScale,
+      score: (84 + expectedDoubleRent * 8) * context.weights.aggressionScale,
       meta: {
         sourceCardId: card.id,
         sourceCardName: card.name,
-        expectedRent,
-        highImpact: highImpactRent || expectedRent >= 8,
+        expectedRent: expectedDoubleRent,
+        nominalRent: nominalDoubleRent,
+        highImpact: highImpactRent || expectedDoubleRent >= 8,
         hiddenRiskSensitive: true,
       },
     }
@@ -888,11 +1112,12 @@ function scoreRentPlay(
 
   return {
     decision: { type: 'playRent', cardId: card.id, targetColor: bestColor },
-    score: (expectedRent >= 4 ? 74 : 44 + expectedRent * 6) * context.weights.aggressionScale,
+    score: (expectedSingleRent >= 4 ? 74 : 44 + expectedSingleRent * 6) * context.weights.aggressionScale,
     meta: {
       sourceCardId: card.id,
       sourceCardName: card.name,
-      expectedRent,
+      expectedRent: expectedSingleRent,
+      nominalRent: bestRent,
       highImpact: highImpactRent,
       hiddenRiskSensitive: true,
     },
@@ -921,11 +1146,15 @@ function scoreActionPlay(
         bestStealRent = Math.max(bestStealRent, calculateRent(opponent, color, false))
       }
 
-      let score = 100 + bestStealRent * 3
-      if (aiCompleteSets + 1 >= 3) score += 40
-      if (opponentCompleteSets >= 2) score += 20
-      score += Math.min(30, opponentThreat)
-      score *= context.weights.aggressionScale
+      const successfulScore = (100 + bestStealRent * 3
+        + (aiCompleteSets + 1 >= 3 ? 40 : 0)
+        + (opponentCompleteSets >= 2 ? 20 : 0)
+        + Math.min(30, opponentThreat))
+      const score = expectedValueByResponseBranch(
+        successfulScore,
+        BLOCKED_TOPLINE_ACTION_SCORE,
+        getActionResponseProbabilityByCardName(card.name, context.hidden),
+      ) * context.weights.aggressionScale
       return {
         decision: { type: 'playAction', cardId: card.id },
         score,
@@ -954,11 +1183,16 @@ function scoreActionPlay(
           ),
         )
       }
-      const score = (
+      const successfulScore = (
         62
         + bestDelta * 2
         + (opponentCompleteSets >= 2 ? 10 : 0)
         + Math.min(12, opponentThreat * 0.4)
+      )
+      const score = expectedValueByResponseBranch(
+        successfulScore,
+        BLOCKED_TOPLINE_ACTION_SCORE,
+        getActionResponseProbabilityByCardName(card.name, context.hidden),
       ) * context.weights.aggressionScale
       return {
         decision: { type: 'playAction', cardId: card.id },
@@ -998,11 +1232,16 @@ function scoreActionPlay(
 
       const netGain = bestTake - lowestGiveCost
       if (netGain <= 0 && opponentCompleteSets === 0) return null
-      const score = (
+      const successfulScore = (
         56
         + netGain * 2
         + (opponentCompleteSets >= 2 ? 8 : 0)
         + Math.min(10, opponentThreat * 0.3)
+      )
+      const score = expectedValueByResponseBranch(
+        successfulScore,
+        BLOCKED_TOPLINE_ACTION_SCORE,
+        getActionResponseProbabilityByCardName(card.name, context.hidden),
       ) * context.weights.aggressionScale
       return {
         decision: { type: 'playAction', cardId: card.id },
@@ -1532,8 +1771,14 @@ function getEffectiveMinPlayScore(
 function getHiddenInfoRiskPenalty(play: ScoredPlay, context: DecisionContext): number {
   if (!play.meta?.hiddenRiskSensitive) return 0
 
-  const actionPenalty = play.score * context.hidden.jsnProbability * 0.32 * context.weights.hiddenRiskWeight
-  const rentPenalty = (play.meta.expectedRent ?? 0) * context.hidden.rentResponseProbability * 2.4
+  const actionResponseProbability = play.meta?.sourceCardName
+    ? getActionResponseProbabilityByCardName(play.meta.sourceCardName, context.hidden)
+    : context.hidden.jsnProbability
+  const nominalRent = play.meta?.nominalRent ?? play.meta?.expectedRent ?? 0
+  const rentResponseProbability = getRentResponseProbabilityForAmount(context.hidden, nominalRent)
+
+  const actionPenalty = play.score * actionResponseProbability * 0.32 * context.weights.hiddenRiskWeight
+  const rentPenalty = nominalRent * rentResponseProbability * 2.4
 
   return actionPenalty + rentPenalty
 }
@@ -1543,6 +1788,8 @@ interface LookaheadSnapshot {
   opponentMetrics: FieldMetrics
   aiCompleteSets: number
   opponentCompleteSets: number
+  aiBankValue: number
+  opponentBankValue: number
   opponentTotalValue: number
 }
 
@@ -1582,6 +1829,7 @@ function getHighImpactTwoPlyBonus(
   if (remainingPlays <= 0) return 0
 
   aiTelemetry.lookaheadEvaluations++
+  const responseProbability = getTopLineResponseProbability(play, context)
   const budget: LookaheadBudget = {
     remaining: isNearLethalLookaheadWindow(state, play, context)
       ? LOOKAHEAD_NODE_BUDGET_NEAR_LETHAL
@@ -1590,37 +1838,102 @@ function getHighImpactTwoPlyBonus(
     exhausted: false,
   }
 
-  const snapshot = simulateHighImpactSnapshot(state, play, aiMetrics, opponentMetrics, context)
+  const successSnapshot = simulateHighImpactSnapshot(state, play, aiMetrics, opponentMetrics, context)
+  const blockedSnapshot = simulateBlockedHighImpactSnapshot(state, play, aiMetrics, opponentMetrics)
   const excludedCardIds = new Set<string>([cardId])
   if (play.decision.doubleRentCardId) excludedCardIds.add(play.decision.doubleRentCardId)
 
-  const followUp = estimateBestFollowUp(state, snapshot, excludedCardIds, remainingPlays, context, budget, cache)
-  let bonus = followUp.score * context.weights.lookaheadWeight
-
-  const nextRemainingPlays = remainingPlays - followUp.playCost
-  if (
-    shouldRunThirdPly(snapshot, play, followUp, nextRemainingPlays, context)
-    && followUp.card
-  ) {
-    aiTelemetry.lookaheadDepth3Evaluations++
-    const thirdPlyExcluded = new Set(excludedCardIds)
-    thirdPlyExcluded.add(followUp.card.id)
-    const followUpSnapshot = simulateFollowUpSnapshot(snapshot, followUp.card, context)
-    const thirdPly = estimateBestFollowUp(
+  const successFollowUp = estimateBestFollowUp(
+    state,
+    successSnapshot,
+    excludedCardIds,
+    remainingPlays,
+    context,
+    budget,
+    cache,
+  )
+  const blockedFollowUp = responseProbability > 0
+    ? estimateBestFollowUp(
       state,
-      followUpSnapshot,
-      thirdPlyExcluded,
-      nextRemainingPlays,
+      blockedSnapshot,
+      excludedCardIds,
+      remainingPlays,
       context,
       budget,
       cache,
     )
-    bonus += thirdPly.score * context.weights.lookaheadWeight * 0.42
+    : { score: 0, playCost: 0 } as LookaheadChoice
+  let bonus = expectedValueByResponseBranch(
+    successFollowUp.score,
+    blockedFollowUp.score,
+    responseProbability,
+  ) * context.weights.lookaheadWeight
+
+  const successNextRemainingPlays = remainingPlays - successFollowUp.playCost
+  const blockedNextRemainingPlays = remainingPlays - blockedFollowUp.playCost
+  let successThirdScore = 0
+  let blockedThirdScore = 0
+  if (
+    shouldRunThirdPly(successSnapshot, play, successFollowUp, successNextRemainingPlays, context)
+    && successFollowUp.card
+  ) {
+    aiTelemetry.lookaheadDepth3Evaluations++
+    const thirdPlyExcluded = new Set(excludedCardIds)
+    thirdPlyExcluded.add(successFollowUp.card.id)
+    const followUpSnapshot = simulateFollowUpSnapshot(successSnapshot, successFollowUp.card, context)
+    const thirdPly = estimateBestFollowUp(
+      state,
+      followUpSnapshot,
+      thirdPlyExcluded,
+      successNextRemainingPlays,
+      context,
+      budget,
+      cache,
+    )
+    successThirdScore = thirdPly.score
   }
+
+  if (
+    responseProbability > 0
+    && shouldRunThirdPly(blockedSnapshot, play, blockedFollowUp, blockedNextRemainingPlays, context)
+    && blockedFollowUp.card
+  ) {
+    aiTelemetry.lookaheadDepth3Evaluations++
+    const thirdPlyExcluded = new Set(excludedCardIds)
+    thirdPlyExcluded.add(blockedFollowUp.card.id)
+    const followUpSnapshot = simulateFollowUpSnapshot(blockedSnapshot, blockedFollowUp.card, context)
+    const thirdPly = estimateBestFollowUp(
+      state,
+      followUpSnapshot,
+      thirdPlyExcluded,
+      blockedNextRemainingPlays,
+      context,
+      budget,
+      cache,
+    )
+    blockedThirdScore = thirdPly.score
+  }
+
+  bonus += expectedValueByResponseBranch(
+    successThirdScore,
+    blockedThirdScore,
+    responseProbability,
+  ) * context.weights.lookaheadWeight * 0.42
 
   aiTelemetry.lookaheadNodesVisited += budget.nodesVisited
   if (budget.exhausted) aiTelemetry.lookaheadBudgetHits++
   return bonus
+}
+
+function getTopLineResponseProbability(play: ScoredPlay, context: DecisionContext): number {
+  if (play.decision.type === 'playRent') {
+    const nominalRent = play.meta?.nominalRent ?? play.meta?.expectedRent ?? 0
+    return getRentResponseProbabilityForAmount(context.hidden, nominalRent)
+  }
+  if (play.decision.type === 'playAction' && play.meta?.highImpact) {
+    return getActionResponseProbabilityByCardName(play.meta?.sourceCardName ?? '', context.hidden)
+  }
+  return 0
 }
 
 function simulateHighImpactSnapshot(
@@ -1635,12 +1948,13 @@ function simulateHighImpactSnapshot(
     opponentMetrics: cloneFieldMetrics(opponentMetrics),
     aiCompleteSets: countCompleteSets(state.ai),
     opponentCompleteSets: countCompleteSets(state.player),
+    aiBankValue: getBankValue(state.ai.bank),
+    opponentBankValue: getBankValue(state.player.bank),
     opponentTotalValue: getPlayerTotalValue(state.player),
   }
 
   if (play.decision.type === 'playRent') {
-    const transfer = (play.meta?.expectedRent ?? 0) * (1 - context.hidden.rentResponseProbability * 0.5)
-    snapshot.opponentTotalValue = Math.max(0, snapshot.opponentTotalValue - transfer)
+    applyDebtCollection(snapshot, play.meta?.nominalRent ?? play.meta?.expectedRent ?? 0, context)
     return snapshot
   }
 
@@ -1670,6 +1984,7 @@ function simulateHighImpactSnapshot(
     const target = chooseBestStealTargetForSimulation(targets, snapshot.aiMetrics, snapshot.opponentMetrics, snapshot.opponentCompleteSets)
     setMetricCardCount(snapshot.aiMetrics, target.groupColor, snapshot.aiMetrics[target.groupColor].cardCount + 1)
     setMetricCardCount(snapshot.opponentMetrics, target.groupColor, snapshot.opponentMetrics[target.groupColor].cardCount - 1)
+    snapshot.opponentCompleteSets = countCompleteSetsByMetrics(snapshot.opponentMetrics)
     snapshot.opponentTotalValue = Math.max(0, snapshot.opponentTotalValue - target.card.value)
     return snapshot
   }
@@ -1686,11 +2001,30 @@ function simulateHighImpactSnapshot(
     setMetricCardCount(snapshot.opponentMetrics, take.groupColor, snapshot.opponentMetrics[take.groupColor].cardCount - 1)
     setMetricCardCount(snapshot.aiMetrics, give.groupColor, snapshot.aiMetrics[give.groupColor].cardCount - 1)
     setMetricCardCount(snapshot.opponentMetrics, give.groupColor, snapshot.opponentMetrics[give.groupColor].cardCount + 1)
+    snapshot.aiCompleteSets = countCompleteSetsByMetrics(snapshot.aiMetrics)
+    snapshot.opponentCompleteSets = countCompleteSetsByMetrics(snapshot.opponentMetrics)
 
     snapshot.opponentTotalValue = Math.max(0, snapshot.opponentTotalValue - Math.max(0, take.card.value - give.card.value))
   }
 
   return snapshot
+}
+
+function simulateBlockedHighImpactSnapshot(
+  state: MonopolyDealState,
+  _play: ScoredPlay,
+  aiMetrics: FieldMetrics,
+  opponentMetrics: FieldMetrics,
+): LookaheadSnapshot {
+  return {
+    aiMetrics: cloneFieldMetrics(aiMetrics),
+    opponentMetrics: cloneFieldMetrics(opponentMetrics),
+    aiCompleteSets: countCompleteSets(state.ai),
+    opponentCompleteSets: countCompleteSets(state.player),
+    aiBankValue: getBankValue(state.ai.bank),
+    opponentBankValue: getBankValue(state.player.bank),
+    opponentTotalValue: getPlayerTotalValue(state.player),
+  }
 }
 
 function isNearLethalLookaheadWindow(
@@ -1739,10 +2073,15 @@ function simulateFollowUpSnapshot(
     opponentMetrics: cloneFieldMetrics(snapshot.opponentMetrics),
     aiCompleteSets: snapshot.aiCompleteSets,
     opponentCompleteSets: snapshot.opponentCompleteSets,
+    aiBankValue: snapshot.aiBankValue,
+    opponentBankValue: snapshot.opponentBankValue,
     opponentTotalValue: snapshot.opponentTotalValue,
   }
 
   switch (card.type) {
+    case 'money':
+      next.aiBankValue += card.value
+      break
     case 'property':
       if (card.color) incrementMetricForColor(next, card.color, 'ai')
       break
@@ -1767,7 +2106,7 @@ function simulateFollowUpSnapshot(
     }
     case 'rent': {
       const transfer = estimateRentTransferByMetrics(next, card, context)
-      next.opponentTotalValue = Math.max(0, next.opponentTotalValue - transfer)
+      applyDebtCollection(next, transfer, context)
       break
     }
     case 'action': {
@@ -1792,15 +2131,114 @@ function simulateFollowUpSnapshot(
         incrementMetricForColor(next, giveColor, 'ai', -1)
         incrementMetricForColor(next, giveColor, 'opponent')
       } else if (card.name === 'Debt Collector') {
-        next.opponentTotalValue = Math.max(0, next.opponentTotalValue - 5)
+        applyDebtCollection(next, 5, context)
       } else if (card.name === "It's My Birthday") {
-        next.opponentTotalValue = Math.max(0, next.opponentTotalValue - 2)
+        applyDebtCollection(next, 2, context)
+      } else {
+        next.aiBankValue += card.value
       }
       break
     }
   }
 
   return next
+}
+
+function applyDebtCollection(
+  snapshot: LookaheadSnapshot,
+  requestedAmountRaw: number,
+  context: DecisionContext,
+): void {
+  const requestedAmount = Math.max(0, requestedAmountRaw)
+  if (requestedAmount <= 0) return
+
+  const collectible = Math.min(requestedAmount, snapshot.opponentTotalValue)
+  if (collectible <= 0) return
+
+  const cashFirstProbability = getCashFirstDebtPaymentProbability(snapshot, context)
+  const cashFirstBankPayment = Math.min(snapshot.opponentBankValue, collectible)
+  const defensiveBankPayment = Math.min(snapshot.opponentBankValue, collectible * 0.45)
+  const expectedBankPayment = (
+    cashFirstBankPayment * cashFirstProbability
+    + defensiveBankPayment * (1 - cashFirstProbability)
+  )
+  snapshot.opponentBankValue = Math.max(0, snapshot.opponentBankValue - expectedBankPayment)
+
+  const expectedPropertyPayment = collectible - expectedBankPayment
+  if (expectedPropertyPayment > 0.25) {
+    applyExpectedPropertyPayment(snapshot, expectedPropertyPayment, cashFirstProbability)
+  }
+
+  snapshot.aiBankValue += collectible
+  snapshot.opponentTotalValue = Math.max(0, snapshot.opponentTotalValue - collectible)
+}
+
+function getCashFirstDebtPaymentProbability(
+  snapshot: LookaheadSnapshot,
+  context: DecisionContext,
+): number {
+  const bankCoverage = snapshot.opponentBankValue / Math.max(1, snapshot.opponentTotalValue)
+  return clamp(
+    context.hidden.cashFirstDebtPaymentProbability * 0.65
+    + bankCoverage * 0.35
+    + context.opponentModel.economyRate * 0.15
+    - context.opponentModel.disruptionRate * 0.1,
+    0.15,
+    0.95,
+  )
+}
+
+function applyExpectedPropertyPayment(
+  snapshot: LookaheadSnapshot,
+  amountRaw: number,
+  cashFirstProbability: number,
+): void {
+  let remaining = Math.max(0, amountRaw)
+  if (remaining <= 0) return
+
+  const maxCardsToRemove = 8
+  let cardsRemoved = 0
+  while (remaining > 0.01 && cardsRemoved < maxCardsToRemove) {
+    const candidate = pickPropertyPaymentColor(snapshot.opponentMetrics, cashFirstProbability)
+    if (!candidate) break
+    const unitValue = estimatePropertyUnitValue(snapshot.opponentMetrics[candidate], candidate)
+    setMetricCardCount(
+      snapshot.opponentMetrics,
+      candidate,
+      snapshot.opponentMetrics[candidate].cardCount - 1,
+    )
+    remaining = Math.max(0, remaining - unitValue)
+    cardsRemoved++
+  }
+
+  snapshot.opponentCompleteSets = countCompleteSetsByMetrics(snapshot.opponentMetrics)
+}
+
+function pickPropertyPaymentColor(
+  metrics: FieldMetrics,
+  cashFirstProbability: number,
+): PropertyColor | null {
+  let bestColor: PropertyColor | null = null
+  let bestScore = Number.POSITIVE_INFINITY
+  for (const color of PROPERTY_COLORS) {
+    const metric = metrics[color]
+    if (metric.cardCount <= 0) continue
+    const nearCompletePenalty = metric.cardCount >= metric.needed - 1 ? 3.2 : metric.cardCount >= metric.needed - 2 ? 1.7 : 0.9
+    const completePenalty = metric.cardCount >= metric.needed ? 2 : 0
+    const unitValue = estimatePropertyUnitValue(metric, color)
+    const score = unitValue + (nearCompletePenalty + completePenalty) * (0.45 + cashFirstProbability * 0.35)
+    if (score < bestScore) {
+      bestScore = score
+      bestColor = color
+    }
+  }
+  return bestColor
+}
+
+function estimatePropertyUnitValue(metric: ColorMetrics, color: PropertyColor): number {
+  const cardCount = Math.max(1, metric.cardCount)
+  const byRent = metric.rent > 0 ? metric.rent / cardCount : getBaseRentForCount(color, cardCount)
+  return Math.max(1, byRent)
 }
 
 function incrementMetricForColor(
@@ -1861,8 +2299,11 @@ function estimateRentTransferByMetrics(
   }
   if (bestRent <= 0) return 0
 
-  const expectedRent = bestRent * (1 - context.hidden.jsnProbability * 0.6 * context.weights.hiddenRiskWeight)
-  return expectedRent * (1 - context.hidden.rentResponseProbability * 0.45)
+  return expectedValueByResponseBranch(
+    bestRent,
+    0,
+    getRentResponseProbabilityForAmount(context.hidden, bestRent),
+  )
 }
 
 function pickBestStealableColorByMetrics(
@@ -1949,10 +2390,10 @@ function estimateBestFollowUp(
       case 'wild':
         if (card.color && card.color2) {
           const color = pickBestWildColor(snapshot.aiMetrics, card.color, card.color2)
-          score = scorePropertyPlay(snapshot.aiMetrics, card, color, snapshot.aiCompleteSets) + 3
+          score = scorePropertyPlay(snapshot.aiMetrics, card, color, snapshot.aiCompleteSets) + 12
         } else {
           const color = pickBestRainbowColor(snapshot.aiMetrics)
-          if (color) score = scorePropertyPlay(snapshot.aiMetrics, card, color, snapshot.aiCompleteSets) + 6
+          if (color) score = scorePropertyPlay(snapshot.aiMetrics, card, color, snapshot.aiCompleteSets) + 18
         }
         break
       case 'money':
@@ -1968,7 +2409,7 @@ function estimateBestFollowUp(
         break
       }
       case 'action':
-        score = estimateActionFollowUpScore(snapshot, card)
+        score = estimateActionFollowUpScore(snapshot, card, context)
         break
     }
 
@@ -2078,7 +2519,11 @@ function estimateRentFollowUpScore(
   }
   if (bestRent <= 0) return { score: 0, playCost: 0 }
 
-  const expectedRent = bestRent * (1 - context.hidden.jsnProbability * 0.6 * context.weights.hiddenRiskWeight)
+  const expectedRent = expectedValueByResponseBranch(
+    bestRent,
+    0,
+    getRentResponseProbabilityForAmount(context.hidden, bestRent),
+  )
   if (hasDoubleRent && remainingPlays >= 2 && expectedRent >= 2) {
     return {
       score: 84 + expectedRent * 8,
@@ -2091,14 +2536,36 @@ function estimateRentFollowUpScore(
   }
 }
 
-function estimateActionFollowUpScore(snapshot: LookaheadSnapshot, card: MonopolyCardData): number {
+function estimateActionFollowUpScore(
+  snapshot: LookaheadSnapshot,
+  card: MonopolyCardData,
+  context: DecisionContext,
+): number {
   switch (card.name) {
-    case 'Deal Breaker':
-      return snapshot.opponentCompleteSets > 0 ? 95 : 0
-    case 'Sly Deal':
-      return hasStealableByMetrics(snapshot.opponentMetrics) ? 62 : 0
-    case 'Forced Deal':
-      return hasStealableByMetrics(snapshot.opponentMetrics) && hasStealableByMetrics(snapshot.aiMetrics) ? 56 : 0
+    case 'Deal Breaker': {
+      const success = snapshot.opponentCompleteSets > 0 ? 95 : 0
+      return expectedValueByResponseBranch(
+        success,
+        BLOCKED_TOPLINE_ACTION_SCORE,
+        getActionResponseProbabilityByCardName(card.name, context.hidden),
+      )
+    }
+    case 'Sly Deal': {
+      const success = hasStealableByMetrics(snapshot.opponentMetrics) ? 62 : 0
+      return expectedValueByResponseBranch(
+        success,
+        BLOCKED_TOPLINE_ACTION_SCORE,
+        getActionResponseProbabilityByCardName(card.name, context.hidden),
+      )
+    }
+    case 'Forced Deal': {
+      const success = hasStealableByMetrics(snapshot.opponentMetrics) && hasStealableByMetrics(snapshot.aiMetrics) ? 56 : 0
+      return expectedValueByResponseBranch(
+        success,
+        BLOCKED_TOPLINE_ACTION_SCORE,
+        getActionResponseProbabilityByCardName(card.name, context.hidden),
+      )
+    }
     case 'Debt Collector':
       return snapshot.opponentTotalValue > 0 ? 38 : 0
     case "It's My Birthday":

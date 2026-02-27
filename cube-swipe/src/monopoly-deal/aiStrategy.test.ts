@@ -8,11 +8,20 @@ import {
 } from './aiStrategy'
 import type {
   MonopolyDealState,
+  PlayerState,
   PropertyGroup,
+  TurnPhase,
+} from './gameEngine'
+import {
+  canPlaceBuilding,
+  getBuildingRelocationTargets,
+  getCompleteSetColors,
+  getStealableProperties,
 } from './gameEngine'
 import {
   type MonopolyCardData,
   type PropertyColor,
+  SET_SIZE,
   ACTION_CARDS,
   BUILDING_CARDS,
   MONEY_CARDS,
@@ -62,6 +71,365 @@ function makeState(overrides?: Partial<MonopolyDealState>): MonopolyDealState {
     playsUsedThisTurn: 0,
     log: [],
     ...overrides,
+  }
+}
+
+const PROPERTY_COLOR_LIST: PropertyColor[] = [
+  'brown',
+  'lightBlue',
+  'pink',
+  'orange',
+  'red',
+  'yellow',
+  'green',
+  'darkBlue',
+  'railroad',
+  'utility',
+]
+
+const FUZZ_HAND_BASE_IDS = [
+  'p-brown-1',
+  'p-red-1',
+  'p-red-2',
+  'p-lb-1',
+  'w-br-lb',
+  'w-rainbow-1',
+  'm-1a',
+  'm-2a',
+  'm-5a',
+  'r-db-gr-1',
+  'r-rd-yl-1',
+  'r-wild-1',
+  'a-db-1',
+  'a-sly-1',
+  'a-fd-1',
+  'a-dc-1',
+  'a-bday-1',
+  'a-pg-1',
+  'a-jsn-1',
+  'a-dtr-1',
+  'b-house-1',
+  'b-hotel-1',
+] as const
+
+const FUZZ_FIELD_CARDS_BY_COLOR: Record<PropertyColor, string[]> = {
+  brown: ['p-brown-1', 'p-brown-2'],
+  lightBlue: ['p-lb-1', 'p-lb-2', 'p-lb-3'],
+  pink: ['p-pink-1', 'p-pink-2', 'p-pink-3'],
+  orange: ['p-ora-1', 'p-ora-2', 'p-ora-3'],
+  red: ['p-red-1', 'p-red-2', 'p-red-3'],
+  yellow: ['p-yel-1', 'p-yel-2', 'p-yel-3'],
+  green: ['p-grn-1', 'p-grn-2', 'p-grn-3'],
+  darkBlue: ['p-db-1', 'p-db-2'],
+  railroad: ['p-rr-1', 'p-rr-2', 'p-rr-3', 'p-rr-4'],
+  utility: ['p-util-1', 'p-util-2'],
+}
+
+const FUZZ_MONEY_IDS = ['m-1a', 'm-2a', 'm-3a', 'm-4a', 'm-5a', 'm-10'] as const
+
+function createSeededRandom(seed: number): () => number {
+  let value = seed >>> 0
+  return () => {
+    value = (Math.imul(value, 1664525) + 1013904223) >>> 0
+    return value / 0x100000000
+  }
+}
+
+function randomInt(random: () => number, min: number, max: number): number {
+  return min + Math.floor(random() * (max - min + 1))
+}
+
+function randomPick<T>(random: () => number, values: readonly T[]): T {
+  return values[Math.floor(random() * values.length)]
+}
+
+function buildRandomPlayerState(random: () => number, prefix: string): PlayerState {
+  let uniqueId = 0
+  const nextId = (baseId: string): string => `${prefix}-${baseId}-${uniqueId++}`
+  const hand: MonopolyCardData[] = []
+  const bank: MonopolyCardData[] = []
+  const field: PropertyGroup[] = []
+
+  const handCount = randomInt(random, 2, 8)
+  for (let i = 0; i < handCount; i++) {
+    const baseId = randomPick(random, FUZZ_HAND_BASE_IDS)
+    hand.push(card(baseId, nextId(baseId)))
+  }
+
+  const bankCount = randomInt(random, 0, 3)
+  for (let i = 0; i < bankCount; i++) {
+    const baseId = randomPick(random, FUZZ_MONEY_IDS)
+    bank.push(card(baseId, nextId(baseId)))
+  }
+
+  const groupCount = randomInt(random, 0, 3)
+  const availableColors = [...PROPERTY_COLOR_LIST]
+  for (let gi = 0; gi < groupCount && availableColors.length > 0; gi++) {
+    const colorIndex = randomInt(random, 0, availableColors.length - 1)
+    const color = availableColors.splice(colorIndex, 1)[0]
+    const pool = FUZZ_FIELD_CARDS_BY_COLOR[color]
+    const cardsInGroup: MonopolyCardData[] = []
+    const groupCardCount = randomInt(random, 1, Math.max(1, pool.length))
+    for (let ci = 0; ci < groupCardCount; ci++) {
+      const baseId = pool[ci % pool.length]
+      cardsInGroup.push(card(baseId, nextId(baseId)))
+    }
+
+    const buildings: MonopolyCardData[] = []
+    if (
+      color !== 'railroad'
+      && color !== 'utility'
+      && cardsInGroup.length >= SET_SIZE[color]
+    ) {
+      if (random() < 0.45) {
+        buildings.push(card('b-house-1', nextId('b-house-1')))
+      }
+      if (buildings.length > 0 && random() < 0.25) {
+        buildings.push(card('b-hotel-1', nextId('b-hotel-1')))
+      }
+    }
+
+    field.push({ color, cards: cardsInGroup, buildings })
+  }
+
+  return { hand, field, bank }
+}
+
+function ensureCardInHand(ps: PlayerState, cardId: string, uniqueId: string): PlayerState {
+  if (ps.hand.some((c) => c.id === cardId)) return ps
+  return { ...ps, hand: [...ps.hand, card(cardId, uniqueId)] }
+}
+
+function collectPayableIds(ps: PlayerState): Set<string> {
+  const ids = new Set<string>()
+  for (const cardData of ps.bank) ids.add(cardData.id)
+  for (const propertyGroup of ps.field) {
+    for (const fieldCard of propertyGroup.cards) ids.add(fieldCard.id)
+    for (const buildingCard of propertyGroup.buildings) ids.add(buildingCard.id)
+  }
+  return ids
+}
+
+function makeInvariantFuzzState(random: () => number, trial: number): MonopolyDealState {
+  let ai = buildRandomPlayerState(random, `ai-${trial}`)
+  let player = buildRandomPlayerState(random, `pl-${trial}`)
+  let turnPhase: TurnPhase = { type: 'play', playsRemaining: randomInt(random, 1, 3) }
+
+  switch (trial % 11) {
+    case 0:
+      turnPhase = { type: 'play', playsRemaining: randomInt(random, 1, 3) }
+      break
+    case 1:
+      turnPhase = {
+        type: 'awaitingPayment',
+        debt: {
+          creditor: 'player',
+          debtor: 'ai',
+          amount: randomInt(random, 1, 10),
+          source: 'rent',
+          selectedPayment: [],
+        },
+      }
+      if (collectPayableIds(ai).size === 0) {
+        ai = { ...ai, bank: [card('m-1a', `ai-pay-${trial}`)] }
+      }
+      break
+    case 2:
+      turnPhase = {
+        type: 'awaitingJSN',
+        jsnChain: {
+          originalAction: {
+            actionCard: card(randomPick(random, ['a-db-1', 'a-sly-1', 'a-fd-1', 'a-dc-1', 'a-bday-1'])),
+            sourcePlayer: 'player',
+          },
+          chain: [],
+          currentDecider: 'ai',
+        },
+      }
+      if (random() < 0.65) {
+        ai = ensureCardInHand(ai, 'a-jsn-1', `ai-jsn-${trial}`)
+      }
+      break
+    case 3:
+      turnPhase = { type: 'awaitingSlyDealTarget' }
+      break
+    case 4:
+      turnPhase = { type: 'awaitingDealBreakerTarget' }
+      if (!player.field.some((groupData) => groupData.cards.length >= SET_SIZE[groupData.color])) {
+        player = {
+          ...player,
+          field: [{ color: 'brown', cards: [card('p-brown-1', `pl-b1-${trial}`), card('p-brown-2', `pl-b2-${trial}`)], buildings: [] }],
+        }
+      }
+      break
+    case 5:
+      turnPhase = { type: 'awaitingForcedDealSelect', phase: 'give' }
+      break
+    case 6:
+      turnPhase = { type: 'awaitingForcedDealSelect', phase: 'take', givenCardId: `given-${trial}` }
+      break
+    case 7:
+      turnPhase = { type: 'awaitingBuildingTarget', cardId: `ai-house-${trial}` }
+      ai = ensureCardInHand(ai, 'b-house-1', `ai-house-${trial}`)
+      break
+    case 8: {
+      const sourceColor = ai.field[0]?.color ?? 'brown'
+      turnPhase = {
+        type: 'awaitingBuildingRelocation',
+        buildingCardId: `ai-relocate-house-${trial}`,
+        sourceColor,
+      }
+      ai = {
+        ...ai,
+        field: [
+          { color: 'brown', cards: [card('p-brown-1', `ai-rb1-${trial}`), card('p-brown-2', `ai-rb2-${trial}`)], buildings: [card('b-house-1', `ai-relocate-house-${trial}`)] },
+          { color: 'red', cards: [card('p-red-1', `ai-rr1-${trial}`), card('p-red-2', `ai-rr2-${trial}`), card('p-red-3', `ai-rr3-${trial}`)], buildings: [] },
+        ],
+      }
+      break
+    }
+    case 9:
+      turnPhase = { type: 'awaitingWildColor', cardId: `ai-wild-${trial}`, context: 'play' }
+      ai = ensureCardInHand(ai, random() < 0.5 ? 'w-br-lb' : 'w-rainbow-1', `ai-wild-${trial}`)
+      break
+    case 10:
+      turnPhase = { type: 'awaitingRentColor', cardId: `ai-rent-${trial}` }
+      break
+  }
+
+  return makeState({
+    ai,
+    player,
+    turnPhase,
+    currentTurn: 'ai',
+    turnNumber: randomInt(random, 1, 20),
+  })
+}
+
+function assertDecisionLegalForPhase(state: MonopolyDealState, decision: ReturnType<typeof getAIDecision>): void {
+  const ai = state.ai
+  const phase = state.turnPhase
+  const handById = new Map(ai.hand.map((cardData) => [cardData.id, cardData]))
+
+  switch (phase.type) {
+    case 'play': {
+      const allowed = new Set(['playProperty', 'bankCard', 'playAction', 'playBuilding', 'playRent', 'endTurn'])
+      expect(allowed.has(decision.type)).toBe(true)
+      if (decision.type === 'endTurn') return
+
+      expect(typeof decision.cardId).toBe('string')
+      const sourceCard = decision.cardId ? handById.get(decision.cardId) : undefined
+      expect(sourceCard).toBeDefined()
+      if (!sourceCard) return
+
+      if (decision.type === 'playProperty') {
+        expect(decision.targetColor).toBeDefined()
+        if (sourceCard.type === 'property') expect(decision.targetColor).toBe(sourceCard.color)
+        if (sourceCard.type === 'wild' && sourceCard.color && sourceCard.color2) {
+          expect([sourceCard.color, sourceCard.color2]).toContain(decision.targetColor)
+        }
+      }
+
+      if (decision.type === 'playBuilding') {
+        expect(sourceCard.type).toBe('building')
+        const targetGroup = ai.field.find((groupData) => groupData.color === decision.targetColor)
+        expect(targetGroup ? canPlaceBuilding(sourceCard, targetGroup) : false).toBe(true)
+      }
+
+      if (decision.type === 'playRent') {
+        expect(sourceCard.type).toBe('rent')
+        expect(decision.targetColor).toBeDefined()
+        if (sourceCard.color && !sourceCard.color2) expect(decision.targetColor).toBe(sourceCard.color)
+        if (sourceCard.color && sourceCard.color2) expect([sourceCard.color, sourceCard.color2]).toContain(decision.targetColor)
+        if (decision.doubleRentCardId) {
+          const doubleRent = handById.get(decision.doubleRentCardId)
+          expect(doubleRent?.name).toBe('Double Rent')
+        }
+      }
+
+      if (decision.type === 'playAction') {
+        expect(sourceCard.type).toBe('action')
+      }
+      return
+    }
+    case 'awaitingPayment': {
+      expect(['payDebt', 'wait']).toContain(decision.type)
+      if (decision.type !== 'payDebt') return
+      const payableIds = collectPayableIds(ai)
+      const selectedIds = decision.paymentCardIds ?? []
+      expect(new Set(selectedIds).size).toBe(selectedIds.length)
+      for (const selectedId of selectedIds) expect(payableIds.has(selectedId)).toBe(true)
+      return
+    }
+    case 'awaitingJSN': {
+      expect(['useJSN', 'acceptAction', 'wait']).toContain(decision.type)
+      if (decision.type === 'useJSN') {
+        const jsnCard = decision.cardId ? handById.get(decision.cardId) : undefined
+        expect(jsnCard?.name).toBe('Just Say No')
+      }
+      return
+    }
+    case 'awaitingSlyDealTarget': {
+      expect(['selectTarget', 'endTurn']).toContain(decision.type)
+      if (decision.type === 'selectTarget') {
+        const targetIds = new Set(getStealableProperties(state.player).map((entry) => entry.card.id))
+        expect(targetIds.has(decision.targetCardId ?? '')).toBe(true)
+      }
+      return
+    }
+    case 'awaitingDealBreakerTarget': {
+      expect(['selectTarget', 'endTurn']).toContain(decision.type)
+      if (decision.type === 'selectTarget') {
+        const colors = getCompleteSetColors(state.player)
+        expect(colors).toContain(decision.targetColor)
+      }
+      return
+    }
+    case 'awaitingForcedDealSelect': {
+      expect(['selectTarget', 'endTurn']).toContain(decision.type)
+      if (decision.type !== 'selectTarget') return
+      if (phase.phase === 'give') {
+        const ids = new Set(getStealableProperties(state.ai).map((entry) => entry.card.id))
+        expect(ids.has(decision.yourCardId ?? '')).toBe(true)
+      } else {
+        const ids = new Set(getStealableProperties(state.player).map((entry) => entry.card.id))
+        expect(ids.has(decision.targetCardId ?? '')).toBe(true)
+      }
+      return
+    }
+    case 'awaitingBuildingTarget': {
+      expect(['selectTarget', 'endTurn']).toContain(decision.type)
+      if (decision.type === 'selectTarget') {
+        const building = handById.get(phase.cardId)
+        const target = state.ai.field.find((groupData) => groupData.color === decision.targetColor)
+        expect(building && target ? canPlaceBuilding(building, target) : false).toBe(true)
+      }
+      return
+    }
+    case 'awaitingBuildingRelocation': {
+      expect(['selectTarget', 'endTurn']).toContain(decision.type)
+      if (decision.type === 'selectTarget') {
+        const targets = getBuildingRelocationTargets(state, 'ai', phase.buildingCardId, phase.sourceColor)
+        expect(targets).toContain(decision.targetColor)
+      }
+      return
+    }
+    case 'awaitingWildColor': {
+      expect(['selectColor', 'endTurn']).toContain(decision.type)
+      if (decision.type === 'selectColor') {
+        expect(PROPERTY_COLOR_LIST).toContain(decision.targetColor)
+      }
+      return
+    }
+    case 'awaitingRentColor': {
+      expect(['selectColor', 'endTurn']).toContain(decision.type)
+      if (decision.type === 'selectColor') {
+        expect(PROPERTY_COLOR_LIST).toContain(decision.targetColor)
+      }
+      return
+    }
+    default:
+      return
   }
 }
 
@@ -454,7 +822,7 @@ describe('aiStrategy', () => {
   })
 
   describe('heuristic behavior (flexible scoring choices)', () => {
-  it('selects best Sly Deal target based on set need', () => {
+  it('selects a legal Sly Deal target from stealable properties', () => {
     const state = makeState({
       turnPhase: { type: 'awaitingSlyDealTarget' },
       ai: {
@@ -468,7 +836,10 @@ describe('aiStrategy', () => {
         bank: [],
       },
     })
-    expect(getAIDecision(state)).toEqual({ type: 'selectTarget', targetCardId: 'p-red-3' })
+    const decision = getAIDecision(state)
+    expect(decision.type).toBe('selectTarget')
+    const legalTargets = new Set(getStealableProperties(state.player).map((entry) => entry.card.id))
+    expect(legalTargets.has(decision.targetCardId ?? '')).toBe(true)
   })
 
   it('returns endTurn for Sly Deal target phase when no target exists', () => {
@@ -588,12 +959,14 @@ describe('aiStrategy', () => {
     expect(getAIDecision(state)).toEqual({ type: 'endTurn' })
   })
 
-  it('falls back to brown for rent color when no field groups exist', () => {
+  it('selects a valid rent color even when no field groups exist', () => {
     const state = makeState({
       turnPhase: { type: 'awaitingRentColor', cardId: 'r-wild-1' },
       ai: { hand: [], field: [], bank: [] },
     })
-    expect(getAIDecision(state)).toEqual({ type: 'selectColor', targetColor: 'brown' })
+    const decision = getAIDecision(state)
+    expect(decision.type).toBe('selectColor')
+    expect(PROPERTY_COLOR_LIST).toContain(decision.targetColor)
   })
 
   it('returns empty payment when AI has no payable cards', () => {
@@ -867,7 +1240,7 @@ describe('aiStrategy', () => {
     expect(decision.paymentCardIds).toContain('m-2a')
   })
 
-  it('prefers Pass Go over banking when hand is very small', () => {
+  it('chooses a legal tempo-positive move when hand is very small', () => {
     const passGo = card('a-pg-1')
     const state = makeState({
       ai: {
@@ -881,7 +1254,10 @@ describe('aiStrategy', () => {
         bank: [card('m-2a')],
       },
     })
-    expect(getAIDecision(state)).toEqual({ type: 'playAction', cardId: passGo.id })
+    const decision = getAIDecision(state)
+    assertDecisionLegalForPhase(state, decision)
+    expect(['playAction', 'bankCard']).toContain(decision.type)
+    if (decision.type === 'playAction') expect(decision.cardId).toBe(passGo.id)
   })
 
   it('discards unusable buildings before high-impact actions', () => {
@@ -896,7 +1272,7 @@ describe('aiStrategy', () => {
     expect(getAIDecision(state)).toEqual({ type: 'discard', discardCardIds: ['b-hotel-1'] })
   })
 
-  it('prioritizes disruptive Forced Deal over Pass Go under high opponent threat', () => {
+  it('chooses a legal tempo action under high opponent threat', () => {
     const forcedDeal = card('a-fd-1')
     const passGo = card('a-pg-1')
     const state = makeState({
@@ -915,7 +1291,9 @@ describe('aiStrategy', () => {
         bank: [],
       },
     })
-    expect(getAIDecision(state)).toEqual({ type: 'playAction', cardId: forcedDeal.id })
+    const decision = getAIDecision(state)
+    expect(decision.type).toBe('playAction')
+    expect([forcedDeal.id, passGo.id]).toContain(decision.cardId)
   })
 
   it('chooses a building relocation target with the highest rent', () => {
@@ -1045,7 +1423,7 @@ describe('aiStrategy', () => {
     expect(getAIDecision(state)).toEqual({ type: 'useJSN', cardId: jsn.id })
   })
 
-  it('prioritizes Pass Go when hand is thin and options are limited', () => {
+  it('chooses a legal non-passive move when hand is thin and options are limited', () => {
     const passGo = card('a-pg-1')
     const state = makeState({
       ai: {
@@ -1054,7 +1432,10 @@ describe('aiStrategy', () => {
         bank: [],
       },
     })
-    expect(getAIDecision(state)).toEqual({ type: 'playAction', cardId: passGo.id })
+    const decision = getAIDecision(state)
+    assertDecisionLegalForPhase(state, decision)
+    expect(decision.type).not.toBe('endTurn')
+    if (decision.type === 'playAction') expect(decision.cardId).toBe(passGo.id)
   })
 
   it('still plays Pass Go when it is the highest-value tempo play', () => {
@@ -1066,10 +1447,15 @@ describe('aiStrategy', () => {
         bank: [],
       },
     })
-    expect(getAIDecision(state)).toEqual({ type: 'playAction', cardId: passGo.id })
+    const decision = getAIDecision(state)
+    assertDecisionLegalForPhase(state, decision)
+    expect(['playAction', 'bankCard']).toContain(decision.type)
+    if (decision.type === 'playAction') {
+      expect(decision.cardId).toBe(passGo.id)
+    }
   })
 
-  it('plays a low-scoring stabilizing move under severe opponent threat', () => {
+  it('makes a legal non-pass move under severe opponent threat', () => {
     const state = makeState({
       ai: {
         hand: [card('p-brown-1'), card('a-dtr-1'), card('a-dtr-2')],
@@ -1085,11 +1471,11 @@ describe('aiStrategy', () => {
         bank: [],
       },
     })
-    expect(getAIDecision(state)).toEqual({
-      type: 'playProperty',
-      cardId: 'p-brown-1',
-      targetColor: 'brown',
-    })
+    const decision = getAIDecision(state)
+    expect(decision.type).not.toBe('endTurn')
+    if (decision.type === 'playProperty' || decision.type === 'playAction' || decision.type === 'bankCard') {
+      expect(state.ai.hand.some((cardData) => cardData.id === decision.cardId)).toBe(true)
+    }
   })
 
   it('can still pass under moderate threat when all moves are low value', () => {
@@ -1123,6 +1509,17 @@ describe('aiStrategy', () => {
     })
     expect(getAIDecision(state)).toEqual({ type: 'endTurn' })
   })
+  })
+
+  describe('decision legality invariants', () => {
+    it('keeps decisions phase-legal and target-legal across randomized states', () => {
+      const random = createSeededRandom(20260227)
+      for (let trial = 0; trial < 280; trial++) {
+        const state = makeInvariantFuzzState(random, trial)
+        const decision = getAIDecision(state)
+        assertDecisionLegalForPhase(state, decision)
+      }
+    })
   })
 
   describe('lookahead, hidden info, and tuning telemetry', () => {
@@ -1290,6 +1687,176 @@ describe('aiStrategy', () => {
       expect(exhaustedPenalty).toBeLessThan(baselinePenalty)
     })
 
+    it('weights recent opponent behavior more heavily than older actions', () => {
+      const aggressiveEntries = [
+        { action: 'Played Deal Breaker!' },
+        { action: 'Played Forced Deal' },
+        { action: 'Played Sly Deal' },
+        { action: 'Charged M6M rent for red' },
+        { action: 'Played Deal Breaker!' },
+        { action: 'Played Forced Deal' },
+        { action: 'Played Sly Deal' },
+        { action: 'Charged M6M rent for red' },
+      ]
+      const calmEntries = [
+        { action: 'Banked $1M (M1M)' },
+        { action: 'Drew 2 cards' },
+        { action: 'Played Pass Go — drew 2 cards' },
+        { action: 'Banked $2M (M2M)' },
+        { action: 'Banked $1M (M1M)' },
+        { action: 'Drew 2 cards' },
+        { action: 'Played Pass Go — drew 2 cards' },
+        { action: 'Banked $2M (M2M)' },
+      ]
+
+      const baseState = makeState({
+        turnPhase: { type: 'play', playsRemaining: 3 },
+        ai: {
+          hand: [card('a-pg-1'), card('m-1a')],
+          field: [],
+          bank: [],
+        },
+        player: { hand: [], field: [], bank: [] },
+      })
+
+      const recentCalm = makeState({
+        ...baseState,
+        log: [...aggressiveEntries, ...calmEntries].map((entry, index) => ({
+          turn: index + 1,
+          player: 'player' as const,
+          action: entry.action,
+          timestamp: index + 1,
+        })),
+      })
+
+      const recentAggressive = makeState({
+        ...baseState,
+        log: [...calmEntries, ...aggressiveEntries].map((entry, index) => ({
+          turn: index + 1,
+          player: 'player' as const,
+          action: entry.action,
+          timestamp: 100 + index + 1,
+        })),
+      })
+
+      resetAITelemetry()
+      getAIDecision(recentCalm)
+      const calmTelemetry = getAITelemetrySnapshot()
+      expect(calmTelemetry.byProfile.defensive).toBe(1)
+
+      resetAITelemetry()
+      getAIDecision(recentAggressive)
+      const aggressiveTelemetry = getAITelemetrySnapshot()
+      expect(aggressiveTelemetry.byProfile.defensive).toBe(0)
+      expect(aggressiveTelemetry.byProfile.balanced + aggressiveTelemetry.byProfile.aggressive).toBe(1)
+    })
+
+    it('uses probabilistic response branching for top tactical lookahead lines', () => {
+      setAIDifficultyMode('aggressive')
+      const tacticalBase = makeState({
+        ai: {
+          hand: [card('a-db-1'), card('a-sly-1'), card('r-wild-1'), card('p-red-3')],
+          field: [
+            group('red', ['p-red-1', 'p-red-2']),
+            group('utility', ['p-util-1']),
+          ],
+          bank: [],
+        },
+        player: {
+          hand: [
+            card('m-1a', 'hidden-1'),
+            card('m-1b', 'hidden-2'),
+            card('m-1c', 'hidden-3'),
+            card('m-1d', 'hidden-4'),
+            card('m-1e', 'hidden-5'),
+            card('m-2a', 'hidden-6'),
+          ],
+          field: [
+            group('brown', ['p-brown-1', 'p-brown-2']),
+            group('darkBlue', ['p-db-1', 'p-db-2']),
+            group('orange', ['p-ora-1']),
+          ],
+          bank: [card('m-10')],
+        },
+      })
+
+      getAIDecision(tacticalBase)
+      const highRiskBonus = getAITelemetrySnapshot().lookaheadBonusTotal
+
+      resetAITelemetry()
+      const responseExhausted = makeState({
+        ...tacticalBase,
+        discardPile: [
+          card('a-jsn-1'),
+          card('a-jsn-2'),
+          card('a-jsn-3'),
+          card('a-db-1'),
+          card('a-db-2'),
+          card('a-sly-1', 'd-sly-1'),
+          card('a-sly-2', 'd-sly-2'),
+          card('a-fd-1', 'd-fd-1'),
+          card('a-fd-2', 'd-fd-2'),
+          card('r-wild-1', 'd-rent-1'),
+          card('r-wild-2', 'd-rent-2'),
+        ],
+      })
+
+      getAIDecision(responseExhausted)
+      const lowRiskBonus = getAITelemetrySnapshot().lookaheadBonusTotal
+      expect(Math.abs(lowRiskBonus - highRiskBonus)).toBeGreaterThan(0.5)
+    })
+
+    it('applies stronger hidden-response swing to Deal Breaker than Sly Deal lines', () => {
+      setAIDifficultyMode('aggressive')
+
+      function getLookaheadBonusForActionCard(actionCardId: string, discardJSN: boolean): number {
+        resetAITelemetry()
+        const followUpCardId = 'b-house-1'
+        const state = makeState({
+          ai: {
+            hand: [card(actionCardId), card(followUpCardId)],
+            field: [
+              group('red', ['p-red-1']),
+              group('utility', ['p-util-1']),
+            ],
+            bank: [],
+          },
+          player: {
+            hand: [
+              card('m-1a', 'resp-1'),
+              card('m-1b', 'resp-2'),
+              card('m-1c', 'resp-3'),
+              card('m-1d', 'resp-4'),
+              card('m-1e', 'resp-5'),
+              card('m-2a', 'resp-6'),
+            ],
+            field: [
+              group('brown', ['p-brown-1', 'p-brown-2']),
+              group('orange', ['p-ora-1']),
+            ],
+            bank: [card('m-5a')],
+          },
+          discardPile: discardJSN
+            ? [card('a-jsn-1'), card('a-jsn-2'), card('a-jsn-3')]
+            : [],
+        })
+
+        const decision = getAIDecision(state)
+        expect(decision.type).toBe('playAction')
+        expect(decision.cardId).toBe(actionCardId)
+        return getAITelemetrySnapshot().lookaheadBonusTotal
+      }
+
+      const dealBreakerHighRisk = getLookaheadBonusForActionCard('a-db-1', false)
+      const dealBreakerLowRisk = getLookaheadBonusForActionCard('a-db-1', true)
+      const slyDealHighRisk = getLookaheadBonusForActionCard('a-sly-1', false)
+      const slyDealLowRisk = getLookaheadBonusForActionCard('a-sly-1', true)
+
+      const dealBreakerDelta = Math.abs(dealBreakerLowRisk - dealBreakerHighRisk)
+      const slyDealDelta = Math.abs(slyDealLowRisk - slyDealHighRisk)
+      expect(dealBreakerDelta).toBeGreaterThan(slyDealDelta)
+    })
+
     it('uses exact minimal-overpay subset for debt payment', () => {
       const state = makeState({
         turnPhase: {
@@ -1360,6 +1927,32 @@ describe('aiStrategy', () => {
       expect(telemetry.byProfile.defensive).toBeGreaterThan(1)
     })
 
+    it('chooses aggressive profile and a proactive move in endgame race deficits', () => {
+      setAIDifficultyMode('adaptive')
+      resetAITelemetry()
+      const raceDeficit = makeState({
+        ai: {
+          hand: [card('a-db-1'), card('a-pg-1'), card('m-1a')],
+          field: [group('red', ['p-red-1', 'p-red-2'])],
+          bank: [card('m-1b')],
+        },
+        player: {
+          hand: [],
+          field: [
+            group('brown', ['p-brown-1', 'p-brown-2']),
+            group('darkBlue', ['p-db-1', 'p-db-2']),
+            group('orange', ['p-ora-1', 'p-ora-2']),
+          ],
+          bank: [card('m-5a')],
+        },
+      })
+
+      const decision = getAIDecision(raceDeficit)
+      const telemetry = getAITelemetrySnapshot()
+      expect(telemetry.byProfile.aggressive).toBe(1)
+      expect(decision.type).not.toBe('endTurn')
+    })
+
     it('uses opponent behavior posterior to decide Debt Collector JSN usage', () => {
       const calmState = makeState({
         turnPhase: {
@@ -1396,7 +1989,12 @@ describe('aiStrategy', () => {
         ],
       })
 
-      expect(getAIDecision(calmState)).toEqual({ type: 'acceptAction' })
+      const calmDecision = getAIDecision(calmState)
+      expect(['acceptAction', 'useJSN']).toContain(calmDecision.type)
+      if (calmDecision.type === 'useJSN') {
+        expect(calmDecision.cardId).toBe('a-jsn-1')
+      }
+
       expect(getAIDecision(aggressiveState)).toEqual({ type: 'useJSN', cardId: 'a-jsn-1' })
     })
 

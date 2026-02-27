@@ -68,8 +68,8 @@ const IMAGE_BY_ID: Record<string, string> = {
   'w-pk-or-1': 'wild-pink-orange.png', 'w-pk-or-2': 'wild-pink-orange.png',
   'w-rd-yl-1': 'wild-red-yellow.png', 'w-rd-yl-2': 'wild-red-yellow.png',
   'w-gr-db': 'wild-green-darkblue.png',
-  'w-lb-rr': 'wild-lightblue-railroad.png',
-  'w-rr-ut': 'wild-railroad-utility.png',
+  'w-lb-rr': 'wild-railroad-utility.png',
+  'w-rr-ut': 'wild-lightblue-railroad.png',
   'w-rainbow-1': 'wild-rainbow.png', 'w-rainbow-2': 'wild-rainbow.png',
 
   // Rent cards — only map cards whose image matches their colors
