@@ -1,6 +1,6 @@
-import { Box } from '@mui/material'
+import { Box, Typography } from '@mui/material'
 import { MonopolyCard } from './MonopolyCard'
-import { type MonopolyCardData, type PropertyColor } from './cardData'
+import { type MonopolyCardData, type PropertyColor, COLOR_HEX, COLOR_LABEL } from './cardData'
 
 interface PropertyStackProps {
   /** Property cards in this stack (bottom to top) */
@@ -37,6 +37,7 @@ export function PropertyStack({
     >
       {all.map((card, i) => {
         const isHighlighted = highlightedCardIds?.includes(card.id)
+        const isRainbowWild = card.type === 'wild' && !card.color && groupColor
         return (
           <Box
             key={card.id}
@@ -53,6 +54,30 @@ export function PropertyStack({
             }}
           >
             <MonopolyCard card={card} size={size} groupColor={groupColor} />
+            {isRainbowWild && (
+              <Typography
+                sx={{
+                  position: 'absolute',
+                  bottom: `${2 * size}px`,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  bgcolor: COLOR_HEX[groupColor!],
+                  color: '#fff',
+                  fontSize: 5 * size,
+                  fontWeight: 800,
+                  px: `${3 * size}px`,
+                  py: `${1 * size}px`,
+                  borderRadius: `${2 * size}px`,
+                  lineHeight: 1,
+                  whiteSpace: 'nowrap',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  zIndex: 1,
+                }}
+              >
+                {COLOR_LABEL[groupColor!]}
+              </Typography>
+            )}
           </Box>
         )
       })}

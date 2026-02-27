@@ -1154,13 +1154,34 @@ describe('gameEngine', () => {
   })
 
   describe('Deal Breaker', () => {
-    it('transitions to target selection when opponent has complete sets', () => {
+    it('auto-completes when opponent has exactly one complete set', () => {
       const card = findCardById('a-db-1')
       const state = makeState({
         player: { hand: [card], field: [], bank: [] },
         ai: {
           hand: [],
           field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])],
+          bank: [],
+        },
+      })
+
+      const next = playDealBreaker(state, card.id)
+      // Should auto-steal the only complete set
+      expect(next.turnPhase.type).toBe('play')
+      expect(next.player.field.some((g) => g.color === 'brown')).toBe(true)
+      expect(next.ai.field.some((g) => g.color === 'brown')).toBe(false)
+    })
+
+    it('transitions to target selection when opponent has multiple complete sets', () => {
+      const card = findCardById('a-db-1')
+      const state = makeState({
+        player: { hand: [card], field: [], bank: [] },
+        ai: {
+          hand: [],
+          field: [
+            makeGroup('brown', ['p-brown-1', 'p-brown-2']),
+            makeGroup('darkBlue', ['p-db-1', 'p-db-2']),
+          ],
           bank: [],
         },
       })

@@ -1010,6 +1010,11 @@ export function playDealBreaker(state: MonopolyDealState, cardId: string): Monop
   const jsnState = tryOfferJSN(s, card, p)
   if (jsnState) return jsnState
 
+  // Auto-select if opponent has exactly one complete set
+  if (completeSets.length === 1) {
+    return completeDealBreaker(s, completeSets[0])
+  }
+
   return { ...s, turnPhase: { type: 'awaitingDealBreakerTarget' } }
 }
 
