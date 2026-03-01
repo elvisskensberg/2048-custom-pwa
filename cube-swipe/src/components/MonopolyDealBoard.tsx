@@ -200,10 +200,10 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
   }
 
   return (
-    <Box sx={{ width: '100%', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', bgcolor: 'background.default', position: 'relative' }}>
+    <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'background.default', position: 'relative' }}>
       <BackButton onClick={onBack} />
 
-      <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', pt: 7 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', pt: 7, pb: 2 }}>
         {/* Status bar */}
         <Box sx={{ px: 2, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="body2" sx={{ fontWeight: 600, color: winner ? 'success.main' : 'text.primary' }}>

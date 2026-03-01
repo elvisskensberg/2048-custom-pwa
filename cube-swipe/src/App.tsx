@@ -106,7 +106,7 @@ function App() {
           justifyContent: 'flex-start',
           bgcolor: 'background.default',
           pt: aboutOpen || templatesOpen || monopolyDealOpen ? 0 : { xs: 8, sm: 10 },
-          overflow: currentView === 'menu' || currentView === 'modeSelect' || currentView === 'comments' ? 'auto' : 'hidden',
+          overflow: currentView === 'menu' || currentView === 'modeSelect' || currentView === 'comments' || currentView === 'monopolyDeal' ? 'auto' : 'hidden',
         }}
       >
         {!aboutOpen && !templatesOpen && !monopolyDealOpen && (gameStarted || commentsOpen) && (

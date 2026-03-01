@@ -24,7 +24,7 @@ function push(msg: string): void {
   entries.push({ ts: Date.now(), msg })
   if (entries.length > MAX_ENTRIES) entries.shift()
   // eslint-disable-next-line no-console
-  console.log(`[MD] ${msg}`)
+  console.info(`[MD] ${msg}`)
 }
 
 /** Log a state snapshot. */
@@ -56,27 +56,27 @@ function installGlobals(): void {
     for (const e of slice) {
       const delta = ((e.ts - t0) / 1000).toFixed(1).padStart(7)
       // eslint-disable-next-line no-console
-      console.log(`${delta}s  ${e.msg}`)
+      console.info(`${delta}s  ${e.msg}`)
     }
     // eslint-disable-next-line no-console
-    console.log(`— ${slice.length} entries (${entries.length} total) —`)
+    console.info(`— ${slice.length} entries (${entries.length} total) —`)
   }
 
   w.mdLogClear = (): void => {
     entries.length = 0
     // eslint-disable-next-line no-console
-    console.log('[MD] Log cleared')
+    console.info('[MD] Log cleared')
   }
 
   w.mdLogState = (): void => {
     if (!stateRef) {
       // eslint-disable-next-line no-console
-      console.log('[MD] No state captured yet')
+      console.info('[MD] No state captured yet')
       return
     }
     const s = stateRef
     // eslint-disable-next-line no-console
-    console.log('[MD] Current state:', {
+    console.info('[MD] Current state:', {
       turn: s.currentTurn,
       phase: s.turnPhase,
       playerHand: s.player.hand.map((c) => `${c.name} (${c.id})`),
