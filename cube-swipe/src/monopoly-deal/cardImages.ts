@@ -77,7 +77,7 @@ const IMAGE_BY_ID: Record<string, string> = {
   'r-lb-br-1': 'action-rent-2color.png', 'r-lb-br-2': 'action-rent-2color.png',
   'r-pk-or-1': 'action-rent-2color.png', 'r-pk-or-2': 'action-rent-2color.png',
   'r-rd-yl-1': 'action-rent-2color.png', 'r-rd-yl-2': 'action-rent-2color.png',
-  'r-rr-ut-1': 'action-rent-2color.png', 'r-rr-ut-2': 'action-rent-2color.png',
+  'r-rr-ut-1': 'action-charge.png', 'r-rr-ut-2': 'action-charge.png',
   'r-wild-1': 'action-rent-multi.png', 'r-wild-2': 'action-rent-multi.png', 'r-wild-3': 'action-rent-multi.png',
 }
 

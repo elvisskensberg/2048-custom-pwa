@@ -26,6 +26,12 @@ import {
   canPlaceBuilding,
   getPlayerTotalValue,
   getBuildingRelocationTargets,
+  playDealBreaker,
+  completeDealBreaker,
+  playSlyDeal,
+  completeSlyDeal,
+  playForcedDeal,
+  completeForcedDeal,
 } from './gameEngine'
 
 // ---------------------------------------------------------------------------
@@ -69,6 +75,14 @@ interface ScoredPlay {
     appliedRiskPenalty?: number
     lookaheadBonus?: number
   }
+}
+
+interface EvaluatedPlayCandidate {
+  play: ScoredPlay
+  adjustedScore: number
+  lookaheadBonus: number
+  riskPenalty: number
+  exactBonus: number
 }
 
 interface ColorMetrics {
@@ -132,6 +146,39 @@ interface OpponentBehaviorModel {
     rentDiscardRatio: number
     disruptionDiscardRatio: number
   }
+  memory: OpponentMemoryModel
+}
+
+interface OpponentMemoryModel {
+  influence: number
+  historicalAggressionRate: number
+  historicalDisruptionRate: number
+  historicalEconomyRate: number
+  historicalRentRate: number
+  historicalJSNRate: number
+  historicalDealBreakerRate: number
+  historicalSlyDealRate: number
+  historicalForcedDealRate: number
+  historicalDebtCollectorRate: number
+}
+
+interface OpponentActionSignals {
+  totalWeight: number
+  disruption: number
+  economy: number
+  rentAggression: number
+  jsnUsage: number
+  dealBreaker: number
+  slyDeal: number
+  forcedDeal: number
+  debtCollector: number
+  passGo: number
+  birthday: number
+}
+
+interface PersistentOpponentMemoryState extends OpponentActionSignals {
+  lastProcessedLogLength: number
+  lastObservedTurn: number
 }
 
 interface DecisionContext {
@@ -152,8 +199,13 @@ export interface AITelemetrySnapshot {
   lookaheadBudgetHits: number
   lookaheadCacheHits: number
   lookaheadCacheMisses: number
+  lookaheadCounterBranches: number
+  lookaheadCounterBranchProbabilityTotal: number
   lookaheadBonusTotal: number
   hiddenRiskPenaltyTotal: number
+  exactTacticalSimulations: number
+  exactTacticalBonusTotal: number
+  opponentMemoryInfluenceTotal: number
   paymentSearchCalls: number
   paymentSearchNodesVisited: number
   paymentExactMatches: number
@@ -183,6 +235,9 @@ const LOOKAHEAD_NODE_BUDGET_BASE = 18
 const LOOKAHEAD_NODE_BUDGET_NEAR_LETHAL = 30
 const SLOW_DECISION_THRESHOLD_MS = 10
 const BLOCKED_TOPLINE_ACTION_SCORE = 8
+const MAX_EXACT_TACTICAL_REFINEMENTS = 2
+const MIN_EXACT_TACTICAL_REFINEMENT_SCORE = 40
+const OPPONENT_MEMORY_DECAY_PER_TURN = 0.94
 const TOTAL_JSN_CARDS = ACTION_CARDS.filter((card) => card.name === 'Just Say No').length
 const TOTAL_DECK_CARDS = (
   PROPERTY_CARDS.length
@@ -250,8 +305,13 @@ const aiTelemetry: AITelemetrySnapshot = {
   lookaheadBudgetHits: 0,
   lookaheadCacheHits: 0,
   lookaheadCacheMisses: 0,
+  lookaheadCounterBranches: 0,
+  lookaheadCounterBranchProbabilityTotal: 0,
   lookaheadBonusTotal: 0,
   hiddenRiskPenaltyTotal: 0,
+  exactTacticalSimulations: 0,
+  exactTacticalBonusTotal: 0,
+  opponentMemoryInfluenceTotal: 0,
   paymentSearchCalls: 0,
   paymentSearchNodesVisited: 0,
   paymentExactMatches: 0,
@@ -260,6 +320,8 @@ const aiTelemetry: AITelemetrySnapshot = {
   slowDecisions: 0,
   recent: [],
 }
+
+let persistentOpponentMemory: PersistentOpponentMemoryState = createEmptyPersistentOpponentMemoryState()
 
 export function setAIDifficultyMode(mode: AIDifficultyMode): void {
   configuredMode = mode
@@ -279,8 +341,13 @@ export function resetAITelemetry(): void {
   aiTelemetry.lookaheadBudgetHits = 0
   aiTelemetry.lookaheadCacheHits = 0
   aiTelemetry.lookaheadCacheMisses = 0
+  aiTelemetry.lookaheadCounterBranches = 0
+  aiTelemetry.lookaheadCounterBranchProbabilityTotal = 0
   aiTelemetry.lookaheadBonusTotal = 0
   aiTelemetry.hiddenRiskPenaltyTotal = 0
+  aiTelemetry.exactTacticalSimulations = 0
+  aiTelemetry.exactTacticalBonusTotal = 0
+  aiTelemetry.opponentMemoryInfluenceTotal = 0
   aiTelemetry.paymentSearchCalls = 0
   aiTelemetry.paymentSearchNodesVisited = 0
   aiTelemetry.paymentExactMatches = 0
@@ -288,6 +355,7 @@ export function resetAITelemetry(): void {
   aiTelemetry.maxDecisionMs = 0
   aiTelemetry.slowDecisions = 0
   aiTelemetry.recent = []
+  persistentOpponentMemory = createEmptyPersistentOpponentMemoryState()
 }
 
 export function getAITelemetrySnapshot(): AITelemetrySnapshot {
@@ -352,6 +420,7 @@ export function getAIDecision(state: MonopolyDealState): AIDecision {
 
 function buildDecisionContext(state: MonopolyDealState): DecisionContext {
   const opponentModel = buildOpponentBehaviorModel(state)
+  aiTelemetry.opponentMemoryInfluenceTotal += opponentModel.memory.influence
   const resolvedProfile = resolveProfile(state, opponentModel)
   const tunedByOpponent = applyOpponentTuning(PROFILE_WEIGHTS[resolvedProfile], opponentModel)
   const tunedByRace = applyWinRaceTuning(tunedByOpponent, state, opponentModel)
@@ -378,86 +447,218 @@ function resolveProfile(state: MonopolyDealState, opponentModel: OpponentBehavio
   return 'balanced'
 }
 
+function createEmptyOpponentActionSignals(): OpponentActionSignals {
+  return {
+    totalWeight: 0,
+    disruption: 0,
+    economy: 0,
+    rentAggression: 0,
+    jsnUsage: 0,
+    dealBreaker: 0,
+    slyDeal: 0,
+    forcedDeal: 0,
+    debtCollector: 0,
+    passGo: 0,
+    birthday: 0,
+  }
+}
+
+function createEmptyPersistentOpponentMemoryState(): PersistentOpponentMemoryState {
+  return {
+    ...createEmptyOpponentActionSignals(),
+    lastProcessedLogLength: 0,
+    lastObservedTurn: 1,
+  }
+}
+
+function decayPersistentOpponentMemory(turnDeltaRaw: number): void {
+  const turnDelta = Math.max(0, turnDeltaRaw)
+  if (turnDelta <= 0) return
+  const decay = Math.pow(OPPONENT_MEMORY_DECAY_PER_TURN, turnDelta)
+  persistentOpponentMemory.totalWeight *= decay
+  persistentOpponentMemory.disruption *= decay
+  persistentOpponentMemory.economy *= decay
+  persistentOpponentMemory.rentAggression *= decay
+  persistentOpponentMemory.jsnUsage *= decay
+  persistentOpponentMemory.dealBreaker *= decay
+  persistentOpponentMemory.slyDeal *= decay
+  persistentOpponentMemory.forcedDeal *= decay
+  persistentOpponentMemory.debtCollector *= decay
+  persistentOpponentMemory.passGo *= decay
+  persistentOpponentMemory.birthday *= decay
+}
+
+function applyOpponentActionSignals(
+  action: string,
+  weight: number,
+  signals: OpponentActionSignals,
+): void {
+  signals.totalWeight += weight
+  if (action.includes('deal breaker')) signals.dealBreaker += weight
+  if (action.includes('sly deal')) signals.slyDeal += weight
+  if (action.includes('forced deal')) signals.forcedDeal += weight
+  if (action.includes('debt collector')) signals.debtCollector += weight
+  if (action.includes('pass go')) signals.passGo += weight
+  if (action.includes("it's my birthday") || action.includes('birthday')) signals.birthday += weight
+  if (
+    action.includes('deal breaker')
+    || action.includes('forced deal')
+    || action.includes('sly deal')
+    || action.includes('debt collector')
+  ) {
+    signals.disruption += weight
+  }
+  if (action.includes('charged m') && action.includes('rent')) signals.rentAggression += weight
+  if (action.includes('just say no')) signals.jsnUsage += weight
+  if (action.includes('banked') || action.includes('drew') || action.includes('pass go')) signals.economy += weight
+}
+
+function buildOpponentMemoryModelFromSignals(
+  signals: OpponentActionSignals,
+  influenceRaw: number,
+): OpponentMemoryModel {
+  const total = Math.max(1e-6, signals.totalWeight)
+  const historicalDisruptionRate = signals.disruption / total
+  const historicalEconomyRate = signals.economy / total
+  const historicalRentRate = signals.rentAggression / total
+  const historicalJSNRate = signals.jsnUsage / total
+  const historicalDealBreakerRate = signals.dealBreaker / total
+  const historicalSlyDealRate = signals.slyDeal / total
+  const historicalForcedDealRate = signals.forcedDeal / total
+  const historicalDebtCollectorRate = signals.debtCollector / total
+  const historicalAggressionRate = clamp(
+    0.29
+    + historicalDisruptionRate * 0.33
+    + historicalRentRate * 0.28
+    + historicalJSNRate * 0.16
+    + historicalDealBreakerRate * 0.2
+    + historicalForcedDealRate * 0.16
+    + historicalSlyDealRate * 0.12
+    + historicalDebtCollectorRate * 0.1
+    - historicalEconomyRate * 0.24,
+    0.05,
+    0.96,
+  )
+
+  return {
+    influence: clamp(influenceRaw, 0, 0.68),
+    historicalAggressionRate,
+    historicalDisruptionRate,
+    historicalEconomyRate,
+    historicalRentRate,
+    historicalJSNRate,
+    historicalDealBreakerRate,
+    historicalSlyDealRate,
+    historicalForcedDealRate,
+    historicalDebtCollectorRate,
+  }
+}
+
+function blendRecentWithMemory(recent: number, historical: number, influence: number): number {
+  return clamp(recent * (1 - influence) + historical * influence, 0, 1)
+}
+
+function updatePersistentOpponentMemory(state: MonopolyDealState): OpponentMemoryModel {
+  if (
+    state.turnNumber < persistentOpponentMemory.lastObservedTurn
+    || state.log.length < persistentOpponentMemory.lastProcessedLogLength
+  ) {
+    persistentOpponentMemory = createEmptyPersistentOpponentMemoryState()
+  }
+
+  const turnDelta = Math.max(0, state.turnNumber - persistentOpponentMemory.lastObservedTurn)
+  decayPersistentOpponentMemory(turnDelta)
+
+  for (let i = persistentOpponentMemory.lastProcessedLogLength; i < state.log.length; i++) {
+    const entry = state.log[i]
+    if (!entry || entry.player !== 'player') continue
+    applyOpponentActionSignals(entry.action.toLowerCase(), 1, persistentOpponentMemory)
+  }
+
+  persistentOpponentMemory.lastProcessedLogLength = state.log.length
+  persistentOpponentMemory.lastObservedTurn = state.turnNumber
+  const influence = clamp(1 - Math.exp(-persistentOpponentMemory.totalWeight / 20), 0, 0.62)
+  return buildOpponentMemoryModelFromSignals(persistentOpponentMemory, influence)
+}
+
 function buildOpponentBehaviorModel(state: MonopolyDealState): OpponentBehaviorModel {
+  const memory = updatePersistentOpponentMemory(state)
+  const influence = memory.influence
   const recentOpponentEntries = state.log
     .filter((entry) => entry.player === 'player')
     .slice(-RECENT_OPPONENT_LOG_WINDOW)
+  const discardSignals = buildDiscardSignals(state.discardPile)
 
   if (recentOpponentEntries.length === 0) {
-    const discardSignals = buildDiscardSignals(state.discardPile)
+    const disruptionRate = blendRecentWithMemory(0, memory.historicalDisruptionRate, Math.max(0.28, influence))
+    const economyRate = blendRecentWithMemory(0, memory.historicalEconomyRate, Math.max(0.28, influence))
+    const rentAggressionRate = blendRecentWithMemory(0, memory.historicalRentRate, Math.max(0.28, influence))
+    const jsnUsageRate = blendRecentWithMemory(0, memory.historicalJSNRate, Math.max(0.28, influence))
+    const cardTypePosterior = {
+      dealBreakerRate: memory.historicalDealBreakerRate,
+      slyDealRate: memory.historicalSlyDealRate,
+      forcedDealRate: memory.historicalForcedDealRate,
+      debtCollectorRate: memory.historicalDebtCollectorRate,
+      rentRate: rentAggressionRate,
+      passGoRate: 0,
+      birthdayRate: 0,
+    }
+    const estimatedAggression = clamp(
+      0.3
+      + disruptionRate * 0.34
+      + rentAggressionRate * 0.28
+      + jsnUsageRate * 0.16
+      + cardTypePosterior.dealBreakerRate * 0.18
+      + cardTypePosterior.forcedDealRate * 0.14
+      + cardTypePosterior.slyDealRate * 0.12
+      + cardTypePosterior.debtCollectorRate * 0.08
+      - economyRate * 0.24
+      + memory.historicalAggressionRate * influence * 0.22,
+      0.05,
+      0.96,
+    )
+
     return {
       observedActions: 0,
-      disruptionRate: 0,
-      economyRate: 0,
-      rentAggressionRate: 0,
-      jsnUsageRate: 0,
-      estimatedAggression: 0.35,
-      cardTypePosterior: {
-        dealBreakerRate: 0,
-        slyDealRate: 0,
-        forcedDealRate: 0,
-        debtCollectorRate: 0,
-        rentRate: 0,
-        passGoRate: 0,
-        birthdayRate: 0,
-      },
+      disruptionRate,
+      economyRate,
+      rentAggressionRate,
+      jsnUsageRate,
+      estimatedAggression,
+      cardTypePosterior,
       discardSignals,
+      memory,
     }
   }
 
-  let disruption = 0
-  let economy = 0
-  let rentAggression = 0
-  let jsnUsage = 0
-  let dealBreaker = 0
-  let slyDeal = 0
-  let forcedDeal = 0
-  let debtCollector = 0
-  let passGo = 0
-  let birthday = 0
-  let totalWeight = 0
+  const recentSignals = createEmptyOpponentActionSignals()
 
   for (let i = 0; i < recentOpponentEntries.length; i++) {
     const entry = recentOpponentEntries[i]
     const age = recentOpponentEntries.length - 1 - i
     const weight = Math.pow(RECENT_OPPONENT_DECAY, age)
-    totalWeight += weight
-    const action = entry.action.toLowerCase()
-    if (action.includes('deal breaker')) dealBreaker += weight
-    if (action.includes('sly deal')) slyDeal += weight
-    if (action.includes('forced deal')) forcedDeal += weight
-    if (action.includes('debt collector')) debtCollector += weight
-    if (action.includes('pass go')) passGo += weight
-    if (action.includes("it's my birthday") || action.includes('birthday')) birthday += weight
-    if (
-      action.includes('deal breaker')
-      || action.includes('forced deal')
-      || action.includes('sly deal')
-      || action.includes('debt collector')
-    ) {
-      disruption += weight
-    }
-    if (action.includes('charged m') && action.includes('rent')) rentAggression += weight
-    if (action.includes('just say no')) jsnUsage += weight
-    if (action.includes('banked') || action.includes('drew') || action.includes('pass go')) economy += weight
+    applyOpponentActionSignals(entry.action.toLowerCase(), weight, recentSignals)
   }
 
-  const observedWeight = Math.max(1e-6, totalWeight)
+  const observedWeight = Math.max(1e-6, recentSignals.totalWeight)
   const observed = recentOpponentEntries.length
-  const disruptionRate = disruption / observedWeight
-  const economyRate = economy / observedWeight
-  const rentAggressionRate = rentAggression / observedWeight
-  const jsnUsageRate = jsnUsage / observedWeight
+  const recentDisruptionRate = recentSignals.disruption / observedWeight
+  const recentEconomyRate = recentSignals.economy / observedWeight
+  const recentRentAggressionRate = recentSignals.rentAggression / observedWeight
+  const recentJSNUsageRate = recentSignals.jsnUsage / observedWeight
+  const disruptionRate = blendRecentWithMemory(recentDisruptionRate, memory.historicalDisruptionRate, influence)
+  const economyRate = blendRecentWithMemory(recentEconomyRate, memory.historicalEconomyRate, influence)
+  const rentAggressionRate = blendRecentWithMemory(recentRentAggressionRate, memory.historicalRentRate, influence)
+  const jsnUsageRate = blendRecentWithMemory(recentJSNUsageRate, memory.historicalJSNRate, influence)
   const cardTypePosterior = {
-    dealBreakerRate: dealBreaker / observedWeight,
-    slyDealRate: slyDeal / observedWeight,
-    forcedDealRate: forcedDeal / observedWeight,
-    debtCollectorRate: debtCollector / observedWeight,
+    dealBreakerRate: blendRecentWithMemory(recentSignals.dealBreaker / observedWeight, memory.historicalDealBreakerRate, influence),
+    slyDealRate: blendRecentWithMemory(recentSignals.slyDeal / observedWeight, memory.historicalSlyDealRate, influence),
+    forcedDealRate: blendRecentWithMemory(recentSignals.forcedDeal / observedWeight, memory.historicalForcedDealRate, influence),
+    debtCollectorRate: blendRecentWithMemory(recentSignals.debtCollector / observedWeight, memory.historicalDebtCollectorRate, influence),
     rentRate: rentAggressionRate,
-    passGoRate: passGo / observedWeight,
-    birthdayRate: birthday / observedWeight,
+    passGoRate: blendRecentWithMemory(recentSignals.passGo / observedWeight, 0, influence * 0.4),
+    birthdayRate: blendRecentWithMemory(recentSignals.birthday / observedWeight, 0, influence * 0.4),
   }
-  const discardSignals = buildDiscardSignals(state.discardPile)
   const estimatedAggression = clamp(
     0.32
     + disruptionRate * 0.36
@@ -469,7 +670,8 @@ function buildOpponentBehaviorModel(state: MonopolyDealState): OpponentBehaviorM
     + cardTypePosterior.debtCollectorRate * 0.1
     - cardTypePosterior.passGoRate * 0.12
     - cardTypePosterior.birthdayRate * 0.06
-    - economyRate * 0.24,
+    - economyRate * 0.24
+    + memory.historicalAggressionRate * influence * 0.24,
     0.05,
     0.96,
   )
@@ -483,6 +685,7 @@ function buildOpponentBehaviorModel(state: MonopolyDealState): OpponentBehaviorM
     estimatedAggression,
     cardTypePosterior,
     discardSignals,
+    memory,
   }
 }
 
@@ -913,11 +1116,9 @@ function choosePlay(
   const opponentCompleteSets = countCompleteSets(opponent)
   const opponentThreat = getOpponentThreatScore(opponentMetrics, opponentCompleteSets) * context.weights.threatSensitivity
 
-  let bestDecision: AIDecision | null = null
-  let bestScore = Number.NEGATIVE_INFINITY
-  let bestLookaheadBonus = 0
-  let bestRiskPenalty = 0
+  const evaluatedCandidates: EvaluatedPlayCandidate[] = []
   const lookaheadCache: LookaheadCache = new Map()
+  const handById = new Map(ai.hand.map((card) => [card.id, card]))
 
   function consider(play: ScoredPlay | null): void {
     if (!play) return
@@ -931,16 +1132,17 @@ function choosePlay(
         playsRemaining,
         context,
         lookaheadCache,
+        handById,
       )
       : 0
     const adjustedScore = play.score - riskPenalty + lookaheadBonus
-
-    if (adjustedScore > bestScore) {
-      bestScore = adjustedScore
-      bestDecision = play.decision
-      bestLookaheadBonus = lookaheadBonus
-      bestRiskPenalty = riskPenalty
-    }
+    evaluatedCandidates.push({
+      play,
+      adjustedScore,
+      lookaheadBonus,
+      riskPenalty,
+      exactBonus: 0,
+    })
   }
 
   for (const card of ai.hand) {
@@ -1004,10 +1206,23 @@ function choosePlay(
     }
   }
 
+  if (evaluatedCandidates.length === 0) return { type: 'endTurn' }
+  applyExactTacticalRefinements(state, evaluatedCandidates)
+
+  let bestCandidate: EvaluatedPlayCandidate | null = null
+  let bestScore = Number.NEGATIVE_INFINITY
+  for (const candidate of evaluatedCandidates) {
+    const finalScore = candidate.adjustedScore + candidate.exactBonus
+    if (finalScore > bestScore) {
+      bestScore = finalScore
+      bestCandidate = candidate
+    }
+  }
+
   const effectiveMinScore = getEffectiveMinPlayScore(opponentThreat, ai.hand.length, context)
-  if (!bestDecision || bestScore < effectiveMinScore) return { type: 'endTurn' }
-  recordLookaheadTelemetry(bestLookaheadBonus, bestRiskPenalty)
-  return bestDecision
+  if (!bestCandidate || bestScore < effectiveMinScore) return { type: 'endTurn' }
+  recordLookaheadTelemetry(bestCandidate.lookaheadBonus + bestCandidate.exactBonus, bestCandidate.riskPenalty)
+  return bestCandidate.play.decision
 }
 
 function scorePropertyPlay(
@@ -1296,6 +1511,197 @@ function scoreActionPlay(
   }
 }
 
+function applyExactTacticalRefinements(
+  state: MonopolyDealState,
+  candidates: EvaluatedPlayCandidate[],
+): void {
+  const refinable = candidates
+    .filter((candidate) => isEligibleForExactTacticalRefinement(candidate.play, candidate.adjustedScore))
+    .sort((a, b) => b.adjustedScore - a.adjustedScore)
+    .slice(0, MAX_EXACT_TACTICAL_REFINEMENTS)
+
+  for (const candidate of refinable) {
+    aiTelemetry.exactTacticalSimulations++
+    const bonus = estimateExactTacticalBonus(state, candidate.play)
+    candidate.exactBonus += bonus
+    aiTelemetry.exactTacticalBonusTotal += bonus
+  }
+}
+
+function isEligibleForExactTacticalRefinement(play: ScoredPlay, adjustedScore: number): boolean {
+  if (!play.meta?.highImpact) return false
+  if (play.decision.type !== 'playAction') return false
+  if (adjustedScore < MIN_EXACT_TACTICAL_REFINEMENT_SCORE) return false
+  const sourceName = play.meta?.sourceCardName
+  return sourceName === 'Deal Breaker' || sourceName === 'Sly Deal' || sourceName === 'Forced Deal'
+}
+
+function estimateExactTacticalBonus(state: MonopolyDealState, play: ScoredPlay): number {
+  const simulated = simulateExactTacticalActionState(state, play)
+  if (!simulated) return 0
+
+  const pre = evaluateExactBoardState(state)
+  const post = evaluateExactBoardState(simulated)
+  const swing = post - pre
+  if (!Number.isFinite(swing) || Math.abs(swing) < 0.01) return 0
+  return clamp(swing * 0.24, -20, 28)
+}
+
+function simulateExactTacticalActionState(
+  state: MonopolyDealState,
+  play: ScoredPlay,
+): MonopolyDealState | null {
+  if (play.decision.type !== 'playAction' || !play.decision.cardId) return null
+  const simulationBase = cloneStateForExactSimulation(state)
+  const actionCardId = play.decision.cardId
+  const sourceCard = simulationBase.ai.hand.find((card) => card.id === actionCardId)
+  if (!sourceCard) return null
+
+  if (sourceCard.name === 'Deal Breaker') {
+    let next = playDealBreaker(simulationBase, actionCardId)
+    if (next.turnPhase.type === 'awaitingDealBreakerTarget') {
+      const targetColor = pickExactBestDealBreakerTarget(next)
+      if (!targetColor) return null
+      next = completeDealBreaker(next, targetColor)
+    }
+    return next
+  }
+
+  if (sourceCard.name === 'Sly Deal') {
+    let next = playSlyDeal(simulationBase, actionCardId)
+    if (next.turnPhase.type === 'awaitingSlyDealTarget') {
+      const targetCardId = pickExactBestSlyTarget(next)
+      if (!targetCardId) return null
+      next = completeSlyDeal(next, targetCardId)
+    }
+    return next
+  }
+
+  if (sourceCard.name === 'Forced Deal') {
+    let next = playForcedDeal(simulationBase, actionCardId)
+    if (next.turnPhase.type !== 'awaitingForcedDealSelect' || next.turnPhase.phase !== 'give') return next
+    const giveCardId = pickExactBestForcedGive(next)
+    const takeCardId = pickExactBestForcedTake(next)
+    if (!giveCardId || !takeCardId) return null
+    next = completeForcedDeal(next, giveCardId, takeCardId)
+    return next
+  }
+
+  return null
+}
+
+function pickExactBestDealBreakerTarget(state: MonopolyDealState): PropertyColor | null {
+  const completeColors = getCompleteSetColors(state.player)
+  if (completeColors.length === 0) return null
+
+  let bestColor = completeColors[0]
+  let bestScore = Number.NEGATIVE_INFINITY
+  for (const color of completeColors) {
+    const rent = calculateRent(state.player, color, false)
+    const group = state.player.field.find((entry) => entry.color === color)
+    const groupValue = group
+      ? [...group.cards, ...group.buildings].reduce((sum, card) => sum + card.value, 0)
+      : 0
+    const score = rent * 3 + groupValue
+    if (score > bestScore) {
+      bestScore = score
+      bestColor = color
+    }
+  }
+  return bestColor
+}
+
+function pickExactBestSlyTarget(state: MonopolyDealState): string | null {
+  const targets = getStealableProperties(state.player)
+  if (targets.length === 0) return null
+
+  const aiMetrics = getFieldMetrics(state.ai)
+  const opponentMetrics = getFieldMetrics(state.player)
+  const opponentCompleteSets = countCompleteSets(state.player)
+  let bestTarget = targets[0]
+  let bestScore = Number.NEGATIVE_INFINITY
+  for (const target of targets) {
+    const score = scoreStealTarget(aiMetrics, opponentMetrics, target.groupColor, target.card.value, opponentCompleteSets)
+    if (score > bestScore) {
+      bestScore = score
+      bestTarget = target
+    }
+  }
+  return bestTarget.card.id
+}
+
+function pickExactBestForcedGive(state: MonopolyDealState): string | null {
+  const myStealable = getStealableProperties(state.ai)
+  if (myStealable.length === 0) return null
+  const aiMetrics = getFieldMetrics(state.ai)
+  let bestId = myStealable[0].card.id
+  let lowestCost = scoreGiveAwayCost(aiMetrics, myStealable[0].groupColor, myStealable[0].card)
+  for (const entry of myStealable) {
+    const cost = scoreGiveAwayCost(aiMetrics, entry.groupColor, entry.card)
+    if (cost < lowestCost) {
+      lowestCost = cost
+      bestId = entry.card.id
+    }
+  }
+  return bestId
+}
+
+function pickExactBestForcedTake(state: MonopolyDealState): string | null {
+  const targets = getStealableProperties(state.player)
+  if (targets.length === 0) return null
+  const aiMetrics = getFieldMetrics(state.ai)
+  const opponentMetrics = getFieldMetrics(state.player)
+  const opponentCompleteSets = countCompleteSets(state.player)
+  let bestTarget = targets[0]
+  let bestScore = Number.NEGATIVE_INFINITY
+  for (const target of targets) {
+    const score = scoreStealTarget(aiMetrics, opponentMetrics, target.groupColor, target.card.value, opponentCompleteSets)
+    if (score > bestScore) {
+      bestScore = score
+      bestTarget = target
+    }
+  }
+  return bestTarget.card.id
+}
+
+function evaluateExactBoardState(state: MonopolyDealState): number {
+  if (state.turnPhase.type === 'gameOver') {
+    return state.turnPhase.winner === 'ai' ? 5000 : -5000
+  }
+
+  const aiSets = countCompleteSets(state.ai)
+  const opponentSets = countCompleteSets(state.player)
+  const aiValue = getPlayerTotalValue(state.ai)
+  const opponentValue = getPlayerTotalValue(state.player)
+  const aiHighestRent = getHighestRentFromPlayerState(state.ai)
+  const opponentHighestRent = getHighestRentFromPlayerState(state.player)
+  const aiStealable = getStealableProperties(state.ai).length
+  const opponentStealable = getStealableProperties(state.player).length
+
+  return (
+    aiSets * 76
+    - opponentSets * 78
+    + (aiValue - opponentValue) * 0.36
+    + (aiHighestRent - opponentHighestRent) * 2.2
+    - aiStealable * 1.05
+    + opponentStealable * 0.95
+  )
+}
+
+function getHighestRentFromPlayerState(player: PlayerState): number {
+  let best = 0
+  for (const group of player.field) {
+    if (group.cards.length <= 0) continue
+    const rent = calculateRent(player, group.color, false)
+    if (rent > best) best = rent
+  }
+  return best
+}
+
+function cloneStateForExactSimulation(state: MonopolyDealState): MonopolyDealState {
+  return JSON.parse(JSON.stringify(state)) as MonopolyDealState
+}
+
 // ---------------------------------------------------------------------------
 // Target selection
 // ---------------------------------------------------------------------------
@@ -1576,7 +1982,11 @@ function chooseJSNResponse(
   }
 
   if (actionName === 'Debt Collector') {
-    if (context.opponentModel.estimatedAggression >= 0.66 && ai.bank.length <= 4) {
+    const aggressionSignal = Math.max(
+      context.opponentModel.estimatedAggression,
+      context.opponentModel.memory.historicalAggressionRate * 0.9,
+    )
+    if (aggressionSignal >= 0.6 && ai.bank.length <= 4) {
       return { type: 'useJSN', cardId: jsnCard.id }
     }
     if (opponentCompleteSets >= 2 && ai.bank.length <= 3) {
@@ -1791,6 +2201,7 @@ interface LookaheadSnapshot {
   aiBankValue: number
   opponentBankValue: number
   opponentTotalValue: number
+  opponentPaymentAssets: OpponentPaymentAsset[]
 }
 
 interface LookaheadBudget {
@@ -1813,6 +2224,14 @@ interface LookaheadCacheEntry {
 
 type LookaheadCache = Map<string, LookaheadCacheEntry>
 
+interface OpponentPaymentAsset {
+  id: string
+  value: number
+  source: 'bank' | 'property' | 'building'
+  color?: PropertyColor
+  buildingBonus?: number
+}
+
 function getHighImpactTwoPlyBonus(
   state: MonopolyDealState,
   play: ScoredPlay,
@@ -1821,6 +2240,7 @@ function getHighImpactTwoPlyBonus(
   playsRemaining: number,
   context: DecisionContext,
   cache: LookaheadCache,
+  handById: Map<string, MonopolyCardData>,
 ): number {
   const cardId = play.meta?.sourceCardId ?? play.decision.cardId
   if (!cardId) return 0
@@ -1830,6 +2250,21 @@ function getHighImpactTwoPlyBonus(
 
   aiTelemetry.lookaheadEvaluations++
   const responseProbability = getTopLineResponseProbability(play, context)
+  const baseExcludedCardIds = new Set<string>([cardId])
+  if (play.decision.doubleRentCardId) baseExcludedCardIds.add(play.decision.doubleRentCardId)
+  const counterJSNCardId = responseProbability > 0
+    ? getAvailableAICounterJSNCardId(state, baseExcludedCardIds)
+    : null
+  const counterResponseProbability = counterJSNCardId
+    ? estimateAICounterResponseProbability(state, play, context)
+    : 0
+  const counteredProbability = clamp(responseProbability * counterResponseProbability, 0, 1)
+  const blockedProbability = clamp(responseProbability * (1 - counterResponseProbability), 0, 1)
+  const successNoResponseProbability = clamp(1 - responseProbability, 0, 1)
+  if (counteredProbability > 0) {
+    aiTelemetry.lookaheadCounterBranches++
+    aiTelemetry.lookaheadCounterBranchProbabilityTotal += counteredProbability
+  }
   const budget: LookaheadBudget = {
     remaining: isNearLethalLookaheadWindow(state, play, context)
       ? LOOKAHEAD_NODE_BUDGET_NEAR_LETHAL
@@ -1840,89 +2275,167 @@ function getHighImpactTwoPlyBonus(
 
   const successSnapshot = simulateHighImpactSnapshot(state, play, aiMetrics, opponentMetrics, context)
   const blockedSnapshot = simulateBlockedHighImpactSnapshot(state, play, aiMetrics, opponentMetrics)
-  const excludedCardIds = new Set<string>([cardId])
-  if (play.decision.doubleRentCardId) excludedCardIds.add(play.decision.doubleRentCardId)
-
-  const successFollowUp = estimateBestFollowUp(
+  let bonus = 0
+  bonus += evaluateHighImpactLookaheadBranch(
     state,
+    play,
     successSnapshot,
+    successNoResponseProbability,
+    baseExcludedCardIds,
+    remainingPlays,
+    context,
+    budget,
+    cache,
+    handById,
+  )
+  bonus += evaluateHighImpactLookaheadBranch(
+    state,
+    play,
+    blockedSnapshot,
+    blockedProbability,
+    baseExcludedCardIds,
+    remainingPlays,
+    context,
+    budget,
+    cache,
+    handById,
+  )
+  if (counteredProbability > 0 && counterJSNCardId) {
+    const counterExcludedCardIds = new Set(baseExcludedCardIds)
+    counterExcludedCardIds.add(counterJSNCardId)
+    bonus += evaluateHighImpactLookaheadBranch(
+      state,
+      play,
+      successSnapshot,
+      counteredProbability,
+      counterExcludedCardIds,
+      remainingPlays,
+      context,
+      budget,
+      cache,
+      handById,
+    )
+  }
+
+  aiTelemetry.lookaheadNodesVisited += budget.nodesVisited
+  if (budget.exhausted) aiTelemetry.lookaheadBudgetHits++
+  return bonus
+}
+
+function evaluateHighImpactLookaheadBranch(
+  state: MonopolyDealState,
+  play: ScoredPlay,
+  snapshot: LookaheadSnapshot,
+  branchProbabilityRaw: number,
+  excludedCardIds: Set<string>,
+  remainingPlays: number,
+  context: DecisionContext,
+  budget: LookaheadBudget,
+  cache: LookaheadCache,
+  handById: Map<string, MonopolyCardData>,
+): number {
+  const branchProbability = clamp(branchProbabilityRaw, 0, 1)
+  if (branchProbability <= 0) return 0
+
+  const followUp = estimateBestFollowUp(
+    state,
+    snapshot,
     excludedCardIds,
     remainingPlays,
     context,
     budget,
     cache,
+    handById,
   )
-  const blockedFollowUp = responseProbability > 0
-    ? estimateBestFollowUp(
-      state,
-      blockedSnapshot,
-      excludedCardIds,
-      remainingPlays,
-      context,
-      budget,
-      cache,
-    )
-    : { score: 0, playCost: 0 } as LookaheadChoice
-  let bonus = expectedValueByResponseBranch(
-    successFollowUp.score,
-    blockedFollowUp.score,
-    responseProbability,
-  ) * context.weights.lookaheadWeight
+  const nextRemainingPlays = remainingPlays - followUp.playCost
+  const postAiSnapshot = followUp.card
+    ? simulateFollowUpSnapshot(snapshot, followUp.card, context)
+    : snapshot
 
-  const successNextRemainingPlays = remainingPlays - successFollowUp.playCost
-  const blockedNextRemainingPlays = remainingPlays - blockedFollowUp.playCost
-  let successThirdScore = 0
-  let blockedThirdScore = 0
+  let thirdPlyScore = 0
   if (
-    shouldRunThirdPly(successSnapshot, play, successFollowUp, successNextRemainingPlays, context)
-    && successFollowUp.card
+    shouldRunThirdPly(snapshot, play, followUp, nextRemainingPlays, context)
+    && followUp.card
   ) {
     aiTelemetry.lookaheadDepth3Evaluations++
-    const thirdPlyExcluded = new Set(excludedCardIds)
-    thirdPlyExcluded.add(successFollowUp.card.id)
-    const followUpSnapshot = simulateFollowUpSnapshot(successSnapshot, successFollowUp.card, context)
+    const thirdPlyExcludedCardIds = new Set(excludedCardIds)
+    thirdPlyExcludedCardIds.add(followUp.card.id)
     const thirdPly = estimateBestFollowUp(
       state,
-      followUpSnapshot,
-      thirdPlyExcluded,
-      successNextRemainingPlays,
+      postAiSnapshot,
+      thirdPlyExcludedCardIds,
+      nextRemainingPlays,
       context,
       budget,
       cache,
+      handById,
     )
-    successThirdScore = thirdPly.score
+    thirdPlyScore = thirdPly.score
   }
 
-  if (
-    responseProbability > 0
-    && shouldRunThirdPly(blockedSnapshot, play, blockedFollowUp, blockedNextRemainingPlays, context)
-    && blockedFollowUp.card
-  ) {
-    aiTelemetry.lookaheadDepth3Evaluations++
-    const thirdPlyExcluded = new Set(excludedCardIds)
-    thirdPlyExcluded.add(blockedFollowUp.card.id)
-    const followUpSnapshot = simulateFollowUpSnapshot(blockedSnapshot, blockedFollowUp.card, context)
-    const thirdPly = estimateBestFollowUp(
-      state,
-      followUpSnapshot,
-      thirdPlyExcluded,
-      blockedNextRemainingPlays,
-      context,
-      budget,
-      cache,
-    )
-    blockedThirdScore = thirdPly.score
+  const counterplayPenalty = estimateOpponentCounterplayPenalty(postAiSnapshot, context)
+  const branchValue = (
+    followUp.score * context.weights.lookaheadWeight
+    + thirdPlyScore * context.weights.lookaheadWeight * 0.42
+    - counterplayPenalty * context.weights.lookaheadWeight * 0.34
+  )
+  return branchProbability * branchValue
+}
+
+function getAvailableAICounterJSNCardId(
+  state: MonopolyDealState,
+  excludedCardIds: Set<string>,
+): string | null {
+  for (const card of state.ai.hand) {
+    if (card.name !== 'Just Say No') continue
+    if (excludedCardIds.has(card.id)) continue
+    return card.id
+  }
+  return null
+}
+
+function estimateAICounterResponseProbability(
+  state: MonopolyDealState,
+  play: ScoredPlay,
+  context: DecisionContext,
+): number {
+  const jsnCount = state.ai.hand.reduce((count, card) => count + (card.name === 'Just Say No' ? 1 : 0), 0)
+  if (jsnCount <= 0) return 0
+
+  let urgency = 0.45
+  if (play.decision.type === 'playAction') {
+    switch (play.meta?.sourceCardName) {
+      case 'Deal Breaker':
+        urgency = 0.84
+        break
+      case 'Forced Deal':
+        urgency = 0.66
+        break
+      case 'Sly Deal':
+        urgency = 0.58
+        break
+      default:
+        urgency = 0.52
+        break
+    }
+  } else if (play.decision.type === 'playRent') {
+    const nominalRent = play.meta?.nominalRent ?? play.meta?.expectedRent ?? 0
+    urgency = clamp(0.3 + nominalRent * 0.09, 0.35, 0.86)
   }
 
-  bonus += expectedValueByResponseBranch(
-    successThirdScore,
-    blockedThirdScore,
-    responseProbability,
-  ) * context.weights.lookaheadWeight * 0.42
-
-  aiTelemetry.lookaheadNodesVisited += budget.nodesVisited
-  if (budget.exhausted) aiTelemetry.lookaheadBudgetHits++
-  return bonus
+  const profileBias = context.resolvedProfile === 'aggressive'
+    ? 0.05
+    : context.resolvedProfile === 'defensive'
+      ? -0.04
+      : 0
+  return clamp(
+    urgency
+    + (jsnCount - 1) * 0.1
+    + profileBias
+    + context.opponentModel.estimatedAggression * 0.06,
+    0.05,
+    0.96,
+  )
 }
 
 function getTopLineResponseProbability(play: ScoredPlay, context: DecisionContext): number {
@@ -1934,6 +2447,128 @@ function getTopLineResponseProbability(play: ScoredPlay, context: DecisionContex
     return getActionResponseProbabilityByCardName(play.meta?.sourceCardName ?? '', context.hidden)
   }
   return 0
+}
+
+function estimateOpponentCounterplayPenalty(
+  snapshot: LookaheadSnapshot,
+  context: DecisionContext,
+): number {
+  let penalty = 0
+
+  const dealBreakerThreatProbability = estimateOpponentCounterActionProbability('Deal Breaker', context)
+  const forcedDealThreatProbability = estimateOpponentCounterActionProbability('Forced Deal', context)
+  const slyDealThreatProbability = estimateOpponentCounterActionProbability('Sly Deal', context)
+  const rentThreatProbability = estimateOpponentCounterActionProbability('Rent', context)
+
+  if (snapshot.aiCompleteSets > 0) {
+    const highestAiCompleteRent = getHighestCompleteSetRent(snapshot.aiMetrics)
+    penalty += dealBreakerThreatProbability * (24 + highestAiCompleteRent * 2.2 + snapshot.aiCompleteSets * 9)
+  }
+
+  const aiStealableExposure = getStealableExposureByMetrics(snapshot.aiMetrics)
+  if (aiStealableExposure > 0) {
+    penalty += slyDealThreatProbability * (10 + aiStealableExposure * 1.65)
+    penalty += forcedDealThreatProbability * (9 + aiStealableExposure * 1.35)
+  }
+
+  const opponentRentThreat = getHighestRentByMetrics(snapshot.opponentMetrics)
+  if (opponentRentThreat > 0) {
+    const aiPayableEstimate = getPayableValueEstimateByMetrics(snapshot.aiMetrics) + snapshot.aiBankValue
+    const effectiveRentThreat = Math.min(opponentRentThreat, aiPayableEstimate)
+    penalty += rentThreatProbability * effectiveRentThreat * 2.1
+  }
+
+  if (snapshot.opponentCompleteSets >= 2) {
+    penalty += 8 + snapshot.opponentCompleteSets * 6
+  }
+
+  return penalty
+}
+
+function estimateOpponentCounterActionProbability(
+  actionName: 'Deal Breaker' | 'Forced Deal' | 'Sly Deal' | 'Rent',
+  context: DecisionContext,
+): number {
+  const aggression = context.opponentModel.estimatedAggression
+  const disruptionDiscardPressure = context.opponentModel.discardSignals.disruptionDiscardRatio
+  switch (actionName) {
+    case 'Deal Breaker':
+      return clamp(
+        0.05
+        + context.opponentModel.cardTypePosterior.dealBreakerRate * 0.52
+        + aggression * 0.18
+        - disruptionDiscardPressure * 0.12,
+        0.02,
+        0.72,
+      )
+    case 'Forced Deal':
+      return clamp(
+        0.06
+        + context.opponentModel.cardTypePosterior.forcedDealRate * 0.5
+        + aggression * 0.14
+        - disruptionDiscardPressure * 0.1,
+        0.03,
+        0.68,
+      )
+    case 'Sly Deal':
+      return clamp(
+        0.07
+        + context.opponentModel.cardTypePosterior.slyDealRate * 0.48
+        + aggression * 0.1
+        - disruptionDiscardPressure * 0.08,
+        0.03,
+        0.66,
+      )
+    case 'Rent':
+      return clamp(
+        0.09
+        + context.opponentModel.rentAggressionRate * 0.52
+        + context.opponentModel.cardTypePosterior.rentRate * 0.18
+        + aggression * 0.12
+        - context.opponentModel.discardSignals.rentDiscardRatio * 0.08,
+        0.04,
+        0.78,
+      )
+  }
+}
+
+function getHighestCompleteSetRent(metrics: FieldMetrics): number {
+  let bestRent = 0
+  for (const color of PROPERTY_COLORS) {
+    const metric = metrics[color]
+    if (metric.cardCount < metric.needed) continue
+    if (metric.rent > bestRent) bestRent = metric.rent
+  }
+  return bestRent
+}
+
+function getStealableExposureByMetrics(metrics: FieldMetrics): number {
+  let exposure = 0
+  for (const color of PROPERTY_COLORS) {
+    const metric = metrics[color]
+    if (metric.cardCount <= 0 || metric.cardCount >= metric.needed) continue
+    const progress = metric.cardCount / metric.needed
+    exposure += 1 + progress * 4 + metric.rent * 0.32
+  }
+  return exposure
+}
+
+function getHighestRentByMetrics(metrics: FieldMetrics): number {
+  let best = 0
+  for (const color of PROPERTY_COLORS) {
+    best = Math.max(best, metrics[color].rent)
+  }
+  return best
+}
+
+function getPayableValueEstimateByMetrics(metrics: FieldMetrics): number {
+  let total = 0
+  for (const color of PROPERTY_COLORS) {
+    const metric = metrics[color]
+    if (metric.cardCount <= 0) continue
+    total += estimatePropertyUnitValue(metric, color) * metric.cardCount
+  }
+  return total
 }
 
 function simulateHighImpactSnapshot(
@@ -1951,6 +2586,7 @@ function simulateHighImpactSnapshot(
     aiBankValue: getBankValue(state.ai.bank),
     opponentBankValue: getBankValue(state.player.bank),
     opponentTotalValue: getPlayerTotalValue(state.player),
+    opponentPaymentAssets: buildOpponentPaymentAssets(state.player),
   }
 
   if (play.decision.type === 'playRent') {
@@ -1971,9 +2607,11 @@ function simulateHighImpactSnapshot(
 
     setMetricCardCount(snapshot.aiMetrics, targetColor, Math.max(snapshot.aiMetrics[targetColor].cardCount, SET_SIZE[targetColor]))
     setMetricCardCount(snapshot.opponentMetrics, targetColor, 0)
+    removeOpponentPaymentAssetsByColor(snapshot, targetColor)
 
     if (!aiWasComplete && isColorComplete(snapshot.aiMetrics[targetColor], targetColor)) snapshot.aiCompleteSets++
     if (opponentWasComplete) snapshot.opponentCompleteSets = Math.max(0, snapshot.opponentCompleteSets - 1)
+    snapshot.opponentCompleteSets = countCompleteSetsByMetrics(snapshot.opponentMetrics)
     return snapshot
   }
 
@@ -1984,8 +2622,8 @@ function simulateHighImpactSnapshot(
     const target = chooseBestStealTargetForSimulation(targets, snapshot.aiMetrics, snapshot.opponentMetrics, snapshot.opponentCompleteSets)
     setMetricCardCount(snapshot.aiMetrics, target.groupColor, snapshot.aiMetrics[target.groupColor].cardCount + 1)
     setMetricCardCount(snapshot.opponentMetrics, target.groupColor, snapshot.opponentMetrics[target.groupColor].cardCount - 1)
+    removeOpponentPaymentAssetById(snapshot, target.card.id)
     snapshot.opponentCompleteSets = countCompleteSetsByMetrics(snapshot.opponentMetrics)
-    snapshot.opponentTotalValue = Math.max(0, snapshot.opponentTotalValue - target.card.value)
     return snapshot
   }
 
@@ -2001,10 +2639,10 @@ function simulateHighImpactSnapshot(
     setMetricCardCount(snapshot.opponentMetrics, take.groupColor, snapshot.opponentMetrics[take.groupColor].cardCount - 1)
     setMetricCardCount(snapshot.aiMetrics, give.groupColor, snapshot.aiMetrics[give.groupColor].cardCount - 1)
     setMetricCardCount(snapshot.opponentMetrics, give.groupColor, snapshot.opponentMetrics[give.groupColor].cardCount + 1)
+    removeOpponentPaymentAssetById(snapshot, take.card.id)
+    addOpponentPaymentAsset(snapshot, give.groupColor, give.card.value)
     snapshot.aiCompleteSets = countCompleteSetsByMetrics(snapshot.aiMetrics)
     snapshot.opponentCompleteSets = countCompleteSetsByMetrics(snapshot.opponentMetrics)
-
-    snapshot.opponentTotalValue = Math.max(0, snapshot.opponentTotalValue - Math.max(0, take.card.value - give.card.value))
   }
 
   return snapshot
@@ -2024,6 +2662,7 @@ function simulateBlockedHighImpactSnapshot(
     aiBankValue: getBankValue(state.ai.bank),
     opponentBankValue: getBankValue(state.player.bank),
     opponentTotalValue: getPlayerTotalValue(state.player),
+    opponentPaymentAssets: buildOpponentPaymentAssets(state.player),
   }
 }
 
@@ -2076,6 +2715,7 @@ function simulateFollowUpSnapshot(
     aiBankValue: snapshot.aiBankValue,
     opponentBankValue: snapshot.opponentBankValue,
     opponentTotalValue: snapshot.opponentTotalValue,
+    opponentPaymentAssets: cloneOpponentPaymentAssets(snapshot.opponentPaymentAssets),
   }
 
   switch (card.type) {
@@ -2115,6 +2755,7 @@ function simulateFollowUpSnapshot(
         if (!targetColor) break
         setMetricCardCount(next.aiMetrics, targetColor, Math.max(next.aiMetrics[targetColor].cardCount, SET_SIZE[targetColor]))
         setMetricCardCount(next.opponentMetrics, targetColor, 0)
+        removeOpponentPaymentAssetsByColor(next, targetColor)
         next.aiCompleteSets = countCompleteSetsByMetrics(next.aiMetrics)
         next.opponentCompleteSets = countCompleteSetsByMetrics(next.opponentMetrics)
       } else if (card.name === 'Sly Deal') {
@@ -2122,10 +2763,14 @@ function simulateFollowUpSnapshot(
         if (!targetColor) break
         incrementMetricForColor(next, targetColor, 'ai')
         incrementMetricForColor(next, targetColor, 'opponent', -1)
+        removeOpponentPaymentAssetByColor(next, targetColor)
       } else if (card.name === 'Forced Deal') {
         const takeColor = pickBestStealableColorByMetrics(next.aiMetrics, next.opponentMetrics, next.opponentCompleteSets)
         const giveColor = pickWorstGiveColorByMetrics(next.aiMetrics)
         if (!takeColor || !giveColor) break
+        const removed = removeOpponentPaymentAssetByColor(next, takeColor)
+        const giveValue = estimatePropertyUnitValue(next.aiMetrics[giveColor], giveColor)
+        addOpponentPaymentAsset(next, giveColor, removed?.value ?? giveValue)
         incrementMetricForColor(next, takeColor, 'ai')
         incrementMetricForColor(next, takeColor, 'opponent', -1)
         incrementMetricForColor(next, giveColor, 'ai', -1)
@@ -2152,25 +2797,35 @@ function applyDebtCollection(
   const requestedAmount = Math.max(0, requestedAmountRaw)
   if (requestedAmount <= 0) return
 
-  const collectible = Math.min(requestedAmount, snapshot.opponentTotalValue)
-  if (collectible <= 0) return
+  const amountToCollect = Math.min(requestedAmount, snapshot.opponentTotalValue)
+  if (amountToCollect <= 0) return
+  if (snapshot.opponentPaymentAssets.length === 0) return
+  const paymentTarget = Math.round(amountToCollect)
+  if (paymentTarget <= 0) return
 
   const cashFirstProbability = getCashFirstDebtPaymentProbability(snapshot, context)
-  const cashFirstBankPayment = Math.min(snapshot.opponentBankValue, collectible)
-  const defensiveBankPayment = Math.min(snapshot.opponentBankValue, collectible * 0.45)
-  const expectedBankPayment = (
-    cashFirstBankPayment * cashFirstProbability
-    + defensiveBankPayment * (1 - cashFirstProbability)
-  )
-  snapshot.opponentBankValue = Math.max(0, snapshot.opponentBankValue - expectedBankPayment)
+  const candidates = buildDebtPaymentCandidates(snapshot, cashFirstProbability)
+  const selectedIds = chooseBestPaymentSubset(candidates, paymentTarget)
+  if (selectedIds.length === 0) return
 
-  const expectedPropertyPayment = collectible - expectedBankPayment
-  if (expectedPropertyPayment > 0.25) {
-    applyExpectedPropertyPayment(snapshot, expectedPropertyPayment, cashFirstProbability)
+  const selected = new Set(selectedIds)
+  const remainingAssets: OpponentPaymentAsset[] = []
+  const paidAssets: OpponentPaymentAsset[] = []
+  for (const asset of snapshot.opponentPaymentAssets) {
+    if (selected.has(asset.id)) paidAssets.push(asset)
+    else remainingAssets.push(asset)
+  }
+  snapshot.opponentPaymentAssets = remainingAssets
+
+  let paidAmount = 0
+  for (const asset of paidAssets) {
+    paidAmount += asset.value
+    removePaidAssetFromSnapshot(snapshot, asset)
   }
 
-  snapshot.aiBankValue += collectible
-  snapshot.opponentTotalValue = Math.max(0, snapshot.opponentTotalValue - collectible)
+  snapshot.opponentCompleteSets = countCompleteSetsByMetrics(snapshot.opponentMetrics)
+  refreshOpponentEconomyFromPaymentAssets(snapshot)
+  snapshot.aiBankValue += paidAmount
 }
 
 function getCashFirstDebtPaymentProbability(
@@ -2188,57 +2843,199 @@ function getCashFirstDebtPaymentProbability(
   )
 }
 
-function applyExpectedPropertyPayment(
+function buildDebtPaymentCandidates(
   snapshot: LookaheadSnapshot,
-  amountRaw: number,
   cashFirstProbability: number,
-): void {
-  let remaining = Math.max(0, amountRaw)
-  if (remaining <= 0) return
-
-  const maxCardsToRemove = 8
-  let cardsRemoved = 0
-  while (remaining > 0.01 && cardsRemoved < maxCardsToRemove) {
-    const candidate = pickPropertyPaymentColor(snapshot.opponentMetrics, cashFirstProbability)
-    if (!candidate) break
-    const unitValue = estimatePropertyUnitValue(snapshot.opponentMetrics[candidate], candidate)
-    setMetricCardCount(
-      snapshot.opponentMetrics,
-      candidate,
-      snapshot.opponentMetrics[candidate].cardCount - 1,
-    )
-    remaining = Math.max(0, remaining - unitValue)
-    cardsRemoved++
+): ScoredCard[] {
+  const candidates: ScoredCard[] = []
+  for (const asset of snapshot.opponentPaymentAssets) {
+    const type = asset.source === 'bank' ? 'money' : asset.source === 'building' ? 'building' : 'property'
+    const synthetic: MonopolyCardData = {
+      id: asset.id,
+      name: `Simulated ${asset.source}`,
+      type,
+      value: Math.max(1, Math.round(asset.value)),
+      color: asset.color,
+    }
+    candidates.push({
+      card: synthetic,
+      score: scoreDebtAssetPreservation(snapshot, asset, cashFirstProbability),
+    })
   }
-
-  snapshot.opponentCompleteSets = countCompleteSetsByMetrics(snapshot.opponentMetrics)
+  return candidates
 }
 
-function pickPropertyPaymentColor(
-  metrics: FieldMetrics,
+function scoreDebtAssetPreservation(
+  snapshot: LookaheadSnapshot,
+  asset: OpponentPaymentAsset,
   cashFirstProbability: number,
-): PropertyColor | null {
-  let bestColor: PropertyColor | null = null
-  let bestScore = Number.POSITIVE_INFINITY
-  for (const color of PROPERTY_COLORS) {
-    const metric = metrics[color]
-    if (metric.cardCount <= 0) continue
-    const nearCompletePenalty = metric.cardCount >= metric.needed - 1 ? 3.2 : metric.cardCount >= metric.needed - 2 ? 1.7 : 0.9
-    const completePenalty = metric.cardCount >= metric.needed ? 2 : 0
-    const unitValue = estimatePropertyUnitValue(metric, color)
-    const score = unitValue + (nearCompletePenalty + completePenalty) * (0.45 + cashFirstProbability * 0.35)
-    if (score < bestScore) {
-      bestScore = score
-      bestColor = color
+): number {
+  if (asset.source === 'bank') {
+    return asset.value * clamp(0.92 - cashFirstProbability * 0.34, 0.4, 1)
+  }
+
+  const metric = asset.color ? snapshot.opponentMetrics[asset.color] : undefined
+  let strategicPenalty = 8
+  if (metric) {
+    if (metric.cardCount >= metric.needed) strategicPenalty += 58
+    else if (metric.cardCount === metric.needed - 1) strategicPenalty += 40
+    else if (metric.cardCount === metric.needed - 2) strategicPenalty += 22
+    strategicPenalty += (metric.cardCount / metric.needed) * 12
+  }
+  if (asset.source === 'building') strategicPenalty += 32 + (asset.buildingBonus ?? 0) * 6
+
+  return strategicPenalty * (1 + (1 - cashFirstProbability) * 0.5) + asset.value
+}
+
+function removePaidAssetFromSnapshot(snapshot: LookaheadSnapshot, asset: OpponentPaymentAsset): void {
+  if (asset.source === 'property' && asset.color) {
+    setMetricCardCount(
+      snapshot.opponentMetrics,
+      asset.color,
+      snapshot.opponentMetrics[asset.color].cardCount - 1,
+    )
+    normalizeBrokenSetBuildings(snapshot, asset.color)
+    return
+  }
+
+  if (asset.source === 'building' && asset.color) {
+    const bonus = asset.buildingBonus ?? inferBuildingBonusFromValue(asset.value)
+    snapshot.opponentMetrics[asset.color] = {
+      ...snapshot.opponentMetrics[asset.color],
+      rent: Math.max(0, snapshot.opponentMetrics[asset.color].rent - bonus),
     }
   }
-  return bestColor
+}
+
+function normalizeBrokenSetBuildings(snapshot: LookaheadSnapshot, color: PropertyColor): void {
+  const metric = snapshot.opponentMetrics[color]
+  if (metric.cardCount >= metric.needed) return
+
+  let convertedBonus = 0
+  for (let i = 0; i < snapshot.opponentPaymentAssets.length; i++) {
+    const asset = snapshot.opponentPaymentAssets[i]
+    if (asset.source !== 'building' || asset.color !== color) continue
+    convertedBonus += asset.buildingBonus ?? inferBuildingBonusFromValue(asset.value)
+    snapshot.opponentPaymentAssets[i] = {
+      ...asset,
+      source: 'bank',
+      color: undefined,
+      buildingBonus: undefined,
+    }
+  }
+
+  if (convertedBonus > 0) {
+    snapshot.opponentMetrics[color] = {
+      ...metric,
+      rent: Math.max(0, metric.rent - convertedBonus),
+    }
+  }
+}
+
+function inferBuildingBonusFromValue(valueRaw: number): number {
+  const value = Math.round(valueRaw)
+  if (value >= 4) return 4
+  return 3
 }
 
 function estimatePropertyUnitValue(metric: ColorMetrics, color: PropertyColor): number {
   const cardCount = Math.max(1, metric.cardCount)
   const byRent = metric.rent > 0 ? metric.rent / cardCount : getBaseRentForCount(color, cardCount)
   return Math.max(1, byRent)
+}
+
+function buildOpponentPaymentAssets(player: PlayerState): OpponentPaymentAsset[] {
+  const assets: OpponentPaymentAsset[] = []
+  for (const card of player.bank) {
+    assets.push({
+      id: card.id,
+      value: Math.max(1, card.value),
+      source: 'bank',
+    })
+  }
+
+  for (const group of player.field) {
+    for (const card of group.cards) {
+      assets.push({
+        id: card.id,
+        value: Math.max(1, card.value),
+        source: 'property',
+        color: group.color,
+      })
+    }
+    for (const building of group.buildings) {
+      assets.push({
+        id: building.id,
+        value: Math.max(1, building.value),
+        source: 'building',
+        color: group.color,
+        buildingBonus: building.name === 'Hotel' ? 4 : 3,
+      })
+    }
+  }
+  return assets
+}
+
+function cloneOpponentPaymentAssets(assets: OpponentPaymentAsset[]): OpponentPaymentAsset[] {
+  return assets.map((asset) => ({ ...asset }))
+}
+
+function refreshOpponentEconomyFromPaymentAssets(snapshot: LookaheadSnapshot): void {
+  let totalValue = 0
+  let bankValue = 0
+  for (const asset of snapshot.opponentPaymentAssets) {
+    totalValue += asset.value
+    if (asset.source === 'bank') bankValue += asset.value
+  }
+  snapshot.opponentTotalValue = totalValue
+  snapshot.opponentBankValue = bankValue
+}
+
+function removeOpponentPaymentAssetsByColor(snapshot: LookaheadSnapshot, color: PropertyColor): void {
+  snapshot.opponentPaymentAssets = snapshot.opponentPaymentAssets.filter((asset) => asset.color !== color)
+  refreshOpponentEconomyFromPaymentAssets(snapshot)
+}
+
+function removeOpponentPaymentAssetById(snapshot: LookaheadSnapshot, id: string): void {
+  snapshot.opponentPaymentAssets = snapshot.opponentPaymentAssets.filter((asset) => asset.id !== id)
+  refreshOpponentEconomyFromPaymentAssets(snapshot)
+}
+
+function removeOpponentPaymentAssetByColor(
+  snapshot: LookaheadSnapshot,
+  color: PropertyColor,
+): OpponentPaymentAsset | null {
+  let bestIndex = -1
+  let bestValue = Number.NEGATIVE_INFINITY
+  for (let i = 0; i < snapshot.opponentPaymentAssets.length; i++) {
+    const asset = snapshot.opponentPaymentAssets[i]
+    if (asset.color !== color) continue
+    if (asset.source === 'building') continue
+    if (asset.value > bestValue) {
+      bestValue = asset.value
+      bestIndex = i
+    }
+  }
+  if (bestIndex === -1) return null
+
+  const [removed] = snapshot.opponentPaymentAssets.splice(bestIndex, 1)
+  refreshOpponentEconomyFromPaymentAssets(snapshot)
+  return removed ?? null
+}
+
+let syntheticOpponentAssetIdCounter = 0
+function addOpponentPaymentAsset(
+  snapshot: LookaheadSnapshot,
+  color: PropertyColor,
+  valueRaw: number,
+): void {
+  snapshot.opponentPaymentAssets.push({
+    id: `sim-op-asset-${syntheticOpponentAssetIdCounter++}`,
+    value: Math.max(1, Math.round(valueRaw)),
+    source: 'property',
+    color,
+  })
+  refreshOpponentEconomyFromPaymentAssets(snapshot)
 }
 
 function incrementMetricForColor(
@@ -2249,6 +3046,10 @@ function incrementMetricForColor(
 ): void {
   const metrics = side === 'ai' ? snapshot.aiMetrics : snapshot.opponentMetrics
   setMetricCardCount(metrics, color, metrics[color].cardCount + delta)
+  if (side === 'opponent' && delta < 0) {
+    normalizeBrokenSetBuildings(snapshot, color)
+    refreshOpponentEconomyFromPaymentAssets(snapshot)
+  }
   snapshot.aiCompleteSets = countCompleteSetsByMetrics(snapshot.aiMetrics)
   snapshot.opponentCompleteSets = countCompleteSetsByMetrics(snapshot.opponentMetrics)
 }
@@ -2356,11 +3157,12 @@ function estimateBestFollowUp(
   context: DecisionContext,
   budget: LookaheadBudget,
   cache: LookaheadCache,
+  handById: Map<string, MonopolyCardData>,
 ): LookaheadChoice {
   const remainingHand = state.ai.hand.filter((card) => !excludedCardIds.has(card.id))
   if (remainingHand.length === 0 || remainingPlays <= 0) return { score: 0, playCost: 0 }
 
-  const cacheKey = buildLookaheadCacheKey(state.ai.hand, snapshot, excludedCardIds, remainingPlays)
+  const cacheKey = buildLookaheadCacheKey(handById, snapshot, excludedCardIds, remainingPlays)
   const cached = cache.get(cacheKey)
   if (cached) {
     aiTelemetry.lookaheadCacheHits++
@@ -2435,14 +3237,13 @@ function estimateBestFollowUp(
 }
 
 function buildLookaheadCacheKey(
-  hand: MonopolyCardData[],
+  handById: Map<string, MonopolyCardData>,
   snapshot: LookaheadSnapshot,
   excludedCardIds: Set<string>,
   remainingPlays: number,
 ): string {
-  const cardById = new Map(hand.map((card) => [card.id, card]))
   const excluded = [...excludedCardIds]
-    .map((id) => cardFingerprint(cardById.get(id), id))
+    .map((id) => cardFingerprint(handById.get(id), id))
     .sort()
     .join(',')
   return [
@@ -2450,8 +3251,10 @@ function buildLookaheadCacheKey(
     snapshot.aiCompleteSets,
     snapshot.opponentCompleteSets,
     Math.round(snapshot.opponentTotalValue * 10),
+    Math.round(snapshot.opponentBankValue * 10),
     serializeMetricsForCache(snapshot.aiMetrics),
     serializeMetricsForCache(snapshot.opponentMetrics),
+    serializeOpponentPaymentAssetsForCache(snapshot.opponentPaymentAssets),
     excluded,
   ].join('|')
 }
@@ -2471,6 +3274,19 @@ function serializeMetricsForCache(metrics: FieldMetrics): string {
   return PROPERTY_COLORS
     .map((color) => `${metrics[color].cardCount}:${Math.round(metrics[color].rent * 10)}`)
     .join(';')
+}
+
+function serializeOpponentPaymentAssetsForCache(assets: OpponentPaymentAsset[]): string {
+  if (assets.length === 0) return ''
+  return assets
+    .map((asset) => [
+      asset.source,
+      asset.color ?? '-',
+      Math.round(asset.value * 10),
+      asset.buildingBonus ?? 0,
+    ].join(':'))
+    .sort()
+    .join(',')
 }
 
 function tryConsumeLookaheadNode(budget: LookaheadBudget): boolean {
@@ -2718,17 +3534,18 @@ function chooseBestPaymentSubset(
     ids: string[]
     cost: number
     count: number
+    signature: string
   }
 
   const bySum: Array<PaymentDPState | null> = new Array(totalValue + 1).fill(null)
-  bySum[0] = { ids: [], cost: 0, count: 0 }
+  bySum[0] = { ids: [], cost: 0, count: 0, signature: '' }
   let nodesVisited = 0
 
   function isBetterForSameSum(candidate: PaymentDPState, current: PaymentDPState | null): boolean {
     if (!current) return true
     if (candidate.cost !== current.cost) return candidate.cost < current.cost
     if (candidate.count !== current.count) return candidate.count < current.count
-    return candidate.ids.join('|') < current.ids.join('|')
+    return candidate.signature < current.signature
   }
 
   for (const candidate of sorted) {
@@ -2741,6 +3558,7 @@ function chooseBestPaymentSubset(
         ids: [...prev.ids, candidate.card.id],
         cost: prev.cost + candidate.score,
         count: prev.count + 1,
+        signature: prev.signature ? `${prev.signature}|${candidate.card.id}` : candidate.card.id,
       }
       if (isBetterForSameSum(nextState, bySum[nextSum])) {
         bySum[nextSum] = nextState
@@ -2761,6 +3579,12 @@ function chooseBestPaymentSubset(
       || overpay < bestOverpay
       || (overpay === bestOverpay && state.cost < best.cost)
       || (overpay === bestOverpay && state.cost === best.cost && state.count < best.count)
+      || (
+        overpay === bestOverpay
+        && state.cost === best.cost
+        && state.count === best.count
+        && state.signature < best.signature
+      )
     ) {
       best = state
       bestOverpay = overpay
