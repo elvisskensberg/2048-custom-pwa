@@ -72,9 +72,12 @@ const IMAGE_BY_ID: Record<string, string> = {
   'w-rr-ut': 'wild-lightblue-railroad.png',
   'w-rainbow-1': 'wild-rainbow.png', 'w-rainbow-2': 'wild-rainbow.png',
 
-  // Rent cards — only map cards whose image matches their colors
-  // Pink/Orange rent uses the pink-orange image; others use CSS rendering
+  // Rent cards
+  'r-db-gr-1': 'action-rent-2color.png', 'r-db-gr-2': 'action-rent-2color.png',
+  'r-lb-br-1': 'action-rent-2color.png', 'r-lb-br-2': 'action-rent-2color.png',
   'r-pk-or-1': 'action-rent-2color.png', 'r-pk-or-2': 'action-rent-2color.png',
+  'r-rd-yl-1': 'action-rent-2color.png', 'r-rd-yl-2': 'action-rent-2color.png',
+  'r-rr-ut-1': 'action-rent-2color.png', 'r-rr-ut-2': 'action-rent-2color.png',
   'r-wild-1': 'action-rent-multi.png', 'r-wild-2': 'action-rent-multi.png', 'r-wild-3': 'action-rent-multi.png',
 }
 
