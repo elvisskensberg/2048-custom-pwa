@@ -68,8 +68,9 @@ const IMAGE_BY_ID: Record<string, string> = {
   'w-pk-or-1': 'wild-pink-orange.png', 'w-pk-or-2': 'wild-pink-orange.png',
   'w-rd-yl-1': 'wild-red-yellow.png', 'w-rd-yl-2': 'wild-red-yellow.png',
   'w-gr-db': 'wild-green-darkblue.png',
-  'w-lb-rr': 'wild-railroad-utility.png',
-  'w-rr-ut': 'wild-lightblue-railroad.png',
+  // w-gr-rr has no image yet — falls back to CSS WildFace
+  'w-lb-rr': 'wild-lightblue-railroad.png',
+  'w-rr-ut': 'wild-railroad-utility.png',
   'w-rainbow-1': 'wild-rainbow.png', 'w-rainbow-2': 'wild-rainbow.png',
 
   // Rent cards (only pink/orange has a matching image; others use CSS rendering)

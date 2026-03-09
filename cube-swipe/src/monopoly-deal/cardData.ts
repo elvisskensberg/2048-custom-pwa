@@ -233,6 +233,7 @@ export const WILD_CARDS: MonopolyCardData[] = [
   { id: 'w-rd-yl-1', type: 'wild', name: 'Wild Property', value: 3, color: 'red', color2: 'yellow' },
   { id: 'w-rd-yl-2', type: 'wild', name: 'Wild Property', value: 3, color: 'red', color2: 'yellow' },
   { id: 'w-gr-db', type: 'wild', name: 'Wild Property', value: 4, color: 'green', color2: 'darkBlue' },
+  { id: 'w-gr-rr', type: 'wild', name: 'Wild Property', value: 4, color: 'green', color2: 'railroad' },
   { id: 'w-lb-rr', type: 'wild', name: 'Wild Property', value: 4, color: 'lightBlue', color2: 'railroad' },
   { id: 'w-rr-ut', type: 'wild', name: 'Wild Property', value: 2, color: 'railroad', color2: 'utility' },
   { id: 'w-rainbow-1', type: 'wild', name: 'Property Wild Card', value: 0 },

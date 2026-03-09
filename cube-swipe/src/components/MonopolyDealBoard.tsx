@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   Box, Typography, Divider, Button, Dialog, DialogTitle,
-  DialogContent, DialogActions, Chip, LinearProgress,
+  DialogContent, DialogActions, Chip, LinearProgress, Snackbar,
 } from '@mui/material'
 import { PlayerField } from '../monopoly-deal/PlayerField'
 import { PlayerHand } from '../monopoly-deal/PlayerHand'
@@ -73,11 +73,19 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
     initiateBuildingRelocation,
     completeBuildingRelocation,
     relocatableBuildings,
+    playJSNDuringPayment,
     discardCard,
     endTurn,
+    log,
   } = game
 
   const [bankMode, setBankMode] = useState(false)
+
+  // ── Action notification toast ──
+  // Track the index of the last dismissed log entry. New entries past this index trigger a toast.
+  const [dismissedLogIdx, setDismissedLogIdx] = useState(-1)
+  const showActionMsg = log.length > 0 && log.length - 1 > dismissedLogIdx
+  const latestLogAction = showActionMsg ? log[log.length - 1].action : null
   // Effective bank mode — only active during player's play phase
   const isBankMode = bankMode && turnPhase.type === 'play' && currentTurn === 'player'
 
@@ -379,8 +387,12 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
         open={turnPhase.type === 'awaitingPayment' && turnPhase.debt.debtor === 'player' && !isAIThinking}
         debt={turnPhase.type === 'awaitingPayment' ? turnPhase.debt : null}
         player={gameState.player}
+        jsnCards={turnPhase.type === 'awaitingPayment' && turnPhase.debt.debtor === 'player'
+          ? playerHand.filter((c) => c.name === 'Just Say No')
+          : []}
         onToggle={togglePaymentCard}
         onConfirm={confirmDebtPayment}
+        onPlayJSN={playJSNDuringPayment}
       />
 
       <JSNDialog
@@ -419,6 +431,16 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
           <Button variant="contained" onClick={startNewGame}>New Game</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Action notification toast */}
+      <Snackbar
+        open={showActionMsg}
+        autoHideDuration={2500}
+        onClose={() => setDismissedLogIdx(log.length - 1)}
+        message={latestLogAction}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        sx={{ top: '48px !important', '& .MuiSnackbarContent-root': { minWidth: 'auto', py: 0.5, px: 2, fontSize: '0.82rem', fontWeight: 600 } }}
+      />
     </Box>
   )
 }
@@ -472,13 +494,15 @@ function ColorPickerDialog({
 }
 
 function PaymentDialog({
-  open, debt, player, onToggle, onConfirm,
+  open, debt, player, jsnCards, onToggle, onConfirm, onPlayJSN,
 }: {
   open: boolean
   debt: { amount: number; selectedPayment: string[] } | null
   player: { hand: MonopolyCardData[]; field: { color: PropertyColor; cards: MonopolyCardData[]; buildings: MonopolyCardData[] }[]; bank: MonopolyCardData[] }
+  jsnCards: MonopolyCardData[]
   onToggle: (id: string) => void
   onConfirm: () => void
+  onPlayJSN: (cardId: string) => void
 }): React.JSX.Element {
   if (!debt) return <></>
   const payable = getPayableCards(player)
@@ -489,6 +513,30 @@ function PaymentDialog({
     <Dialog open={open} maxWidth="sm" fullWidth>
       <DialogTitle>Pay M{debt.amount}M</DialogTitle>
       <DialogContent>
+        {jsnCards.length > 0 && (
+          <>
+            <Typography variant="caption" sx={{ color: 'error.main', fontWeight: 700 }}>
+              Or block with Just Say No:
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center', my: 1 }}>
+              {jsnCards.map((card) => (
+                <Box
+                  key={card.id}
+                  onClick={() => onPlayJSN(card.id)}
+                  sx={{
+                    cursor: 'pointer',
+                    outline: '2px solid #d32f2f',
+                    borderRadius: '4px',
+                    '&:hover': { outline: '3px solid #d32f2f' },
+                  }}
+                >
+                  <MonopolyCard card={card} size={0.8} />
+                </Box>
+              ))}
+            </Box>
+            <Divider sx={{ mb: 1 }} />
+          </>
+        )}
         <Typography variant="body2" sx={{ mb: 1 }}>
           Selected: M{selectedValue}M / M{debt.amount}M
           {totalValue < debt.amount && ' (pay everything you have)'}

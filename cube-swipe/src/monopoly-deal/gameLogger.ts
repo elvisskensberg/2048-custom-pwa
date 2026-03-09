@@ -23,7 +23,7 @@ let stateRef: MonopolyDealState | null = null
 function push(msg: string): void {
   entries.push({ ts: Date.now(), msg })
   if (entries.length > MAX_ENTRIES) entries.shift()
-  // eslint-disable-next-line no-console
+   
   console.info(`[MD] ${msg}`)
 }
 
@@ -55,27 +55,27 @@ function installGlobals(): void {
     const t0 = slice.length > 0 ? slice[0].ts : 0
     for (const e of slice) {
       const delta = ((e.ts - t0) / 1000).toFixed(1).padStart(7)
-      // eslint-disable-next-line no-console
+       
       console.info(`${delta}s  ${e.msg}`)
     }
-    // eslint-disable-next-line no-console
+     
     console.info(`— ${slice.length} entries (${entries.length} total) —`)
   }
 
   w.mdLogClear = (): void => {
     entries.length = 0
-    // eslint-disable-next-line no-console
+     
     console.info('[MD] Log cleared')
   }
 
   w.mdLogState = (): void => {
     if (!stateRef) {
-      // eslint-disable-next-line no-console
+       
       console.info('[MD] No state captured yet')
       return
     }
     const s = stateRef
-    // eslint-disable-next-line no-console
+     
     console.info('[MD] Current state:', {
       turn: s.currentTurn,
       phase: s.turnPhase,

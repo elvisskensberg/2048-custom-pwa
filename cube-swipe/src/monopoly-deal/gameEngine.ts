@@ -50,6 +50,8 @@ export interface PendingAction {
   targetColor?: PropertyColor
   targetCardId?: string
   yourCardId?: string
+  debtAmount?: number
+  debtSource?: DebtInfo['source']
 }
 
 export interface GameLogEntry {
@@ -238,6 +240,20 @@ export function canPlayCard(
   if (card.type === 'building') {
     const hasTarget = ps.field.some((g) => canPlaceBuilding(card, g))
     if (!hasTarget) return { valid: false, reason: 'No complete set to build on' }
+  }
+
+  // Action cards that need valid targets
+  const opp = getPlayer(state, opponent(state.currentTurn))
+  if (card.name === 'Deal Breaker') {
+    if (getCompleteSetColors(opp).length === 0) return { valid: false, reason: 'Opponent has no complete sets' }
+  }
+  if (card.name === 'Sly Deal') {
+    if (getStealableProperties(opp).length === 0) return { valid: false, reason: 'No stealable properties' }
+  }
+  if (card.name === 'Forced Deal') {
+    if (getStealableProperties(ps).length === 0 || getStealableProperties(opp).length === 0) {
+      return { valid: false, reason: 'Both players need properties to swap' }
+    }
   }
 
   return { valid: true }
@@ -468,10 +484,7 @@ export function playRentCard(
   s = { ...s, playsUsedThisTurn: state.playsUsedThisTurn + playCount }
   s = addLog(s, p, `Charged M${rentAmount}M rent for ${color}${doubled ? ' (doubled!)' : ''}`)
 
-  // Offer JSN to defender
-  const jsnState = tryOfferJSN(s, rentCard, p, { targetColor: color, doubleRentCardId })
-  if (jsnState) return jsnState
-
+  // Skip JSN modal for money charges — JSN is offered inline in the payment dialog
   const debt: DebtInfo = {
     creditor: p,
     debtor: opponent(p),
@@ -511,14 +524,7 @@ export function completeRentColor(
   }
   s = addLog(s, p, `Charged M${rentAmount}M rent for ${color}${doubled ? ' (doubled!)' : ''}`)
 
-  // Offer JSN to defender — rent card was already moved to discard in playRentCard
-  const rentCardId = (state.turnPhase as { cardId: string }).cardId
-  const rentCard = state.discardPile.find((c) => c.id === rentCardId)
-  if (rentCard) {
-    const jsnState = tryOfferJSN(s, rentCard, p, { targetColor: color, doubleRentCardId })
-    if (jsnState) return jsnState
-  }
-
+  // Skip JSN modal for money charges — JSN is offered inline in the payment dialog
   const debt: DebtInfo = {
     creditor: p,
     debtor: opponent(p),
@@ -581,12 +587,9 @@ export function playDebtCollector(state: MonopolyDealState, cardId: string): Mon
   const newPs = removeFromHand(ps, cardId)
   let s = setPlayer(state, p, newPs)
   s = { ...s, discardPile: [...s.discardPile, card], playsUsedThisTurn: state.playsUsedThisTurn + 1 }
-  s = addLog(s, p, 'Played Debt Collector — opponent owes M5M')
+  s = addLog(s, p, p === 'player' ? 'You played Debt Collector — AI owes M5M' : 'AI played Debt Collector — you owe M5M')
 
-  // Offer JSN to defender
-  const jsnState = tryOfferJSN(s, card, p)
-  if (jsnState) return jsnState
-
+  // Skip JSN modal for money charges — JSN is offered inline in the payment dialog
   const debt: DebtInfo = {
     creditor: p,
     debtor: opponent(p),
@@ -607,12 +610,9 @@ export function playBirthday(state: MonopolyDealState, cardId: string): Monopoly
   const newPs = removeFromHand(ps, cardId)
   let s = setPlayer(state, p, newPs)
   s = { ...s, discardPile: [...s.discardPile, card], playsUsedThisTurn: state.playsUsedThisTurn + 1 }
-  s = addLog(s, p, "Played It's My Birthday — opponent owes M2M")
+  s = addLog(s, p, p === 'player' ? "You played It's My Birthday — AI owes M2M" : "AI played It's My Birthday — you owe M2M")
 
-  // Offer JSN to defender
-  const jsnState = tryOfferJSN(s, card, p)
-  if (jsnState) return jsnState
-
+  // Skip JSN modal for money charges — JSN is offered inline in the payment dialog
   const debt: DebtInfo = {
     creditor: p,
     debtor: opponent(p),
@@ -661,6 +661,60 @@ export function getSelectedPaymentValue(ps: PlayerState, selectedIds: string[]):
     if (selected.size === 0) break
   }
   return total
+}
+
+/**
+ * Use a Just Say No card from the debtor's hand to block a money charge
+ * (rent, debt collector, birthday) during the payment phase.
+ * If the creditor has JSN, starts a JSN chain. Otherwise, blocks immediately.
+ */
+export function useJSNDuringPayment(state: MonopolyDealState, jsnCardId: string): MonopolyDealState {
+  if (state.turnPhase.type !== 'awaitingPayment') return state
+  const { debt } = state.turnPhase
+  const debtorState = getPlayer(state, debt.debtor)
+  const jsnCard = debtorState.hand.find((c) => c.id === jsnCardId && c.name === 'Just Say No')
+  if (!jsnCard) return state
+
+  // Remove JSN from debtor's hand, discard it
+  const newDebtorState = removeFromHand(debtorState, jsnCardId)
+  let s = setPlayer(state, debt.debtor, newDebtorState)
+  s = { ...s, discardPile: [...s.discardPile, jsnCard] }
+  s = addLog(s, debt.debtor, debt.debtor === 'player' ? 'You played Just Say No to block payment!' : 'AI played Just Say No to block payment!')
+
+  // Check if creditor has JSN to counter
+  const creditorState = getPlayer(s, debt.creditor)
+  const creditorHasJSN = creditorState.hand.some((c) => c.name === 'Just Say No')
+
+  if (creditorHasJSN) {
+    // Start JSN chain — creditor can counter
+    const cardName = debt.source === 'debtCollector' ? 'Debt Collector'
+      : debt.source === 'birthday' ? "It's My Birthday"
+      : 'Rent'
+    const dummyCard: MonopolyCardData = {
+      id: 'jsn-debt-ref', name: cardName, type: 'action', value: 0,
+    }
+    const pending: PendingAction = {
+      actionCard: dummyCard,
+      sourcePlayer: debt.creditor,
+      debtAmount: debt.amount,
+      debtSource: debt.source,
+    }
+    return {
+      ...s,
+      turnPhase: {
+        type: 'awaitingJSN',
+        jsnChain: {
+          originalAction: pending,
+          chain: [{ player: debt.debtor, jsnCardId }],
+          currentDecider: debt.creditor,
+        },
+      },
+    }
+  }
+
+  // No counter — action blocked, return to play
+  const remaining = 3 - s.playsUsedThisTurn
+  return { ...s, turnPhase: { type: 'play', playsRemaining: remaining } }
 }
 
 /** Confirm payment: transfer cards from debtor to creditor. */
@@ -774,7 +828,7 @@ export function confirmPayment(state: MonopolyDealState): MonopolyDealState {
 
 /** Helper to add a property card to a player's field. */
 function addPropertyToField(ps: PlayerState, card: MonopolyCardData, color: PropertyColor): PlayerState {
-  const groupIdx = ps.field.findIndex((g) => g.color === color)
+  const groupIdx = ps.field.findIndex((g) => g.color === color && !isCompleteSet(g))
   if (groupIdx >= 0) {
     const newField = [...ps.field]
     newField[groupIdx] = {
@@ -803,7 +857,7 @@ export function playSlyDeal(state: MonopolyDealState, cardId: string): MonopolyD
   const newPs = removeFromHand(ps, cardId)
   let s = setPlayer(state, p, newPs)
   s = { ...s, discardPile: [...s.discardPile, card], playsUsedThisTurn: state.playsUsedThisTurn + 1 }
-  s = addLog(s, p, 'Played Sly Deal')
+  s = addLog(s, p, p === 'player' ? 'You played Sly Deal' : 'AI played Sly Deal')
 
   // Offer JSN to defender
   const jsnState = tryOfferJSN(s, card, p)
@@ -854,7 +908,7 @@ export function completeSlyDeal(state: MonopolyDealState, targetCardId: string):
 
   const remaining = 3 - s.playsUsedThisTurn
   s = { ...s, turnPhase: { type: 'play', playsRemaining: remaining } }
-  s = addLog(s, p, `Stole ${stolenCard.name} (${stolenColor}) with Sly Deal`)
+  s = addLog(s, p, p === 'player' ? `You stole ${stolenCard.name} (${stolenColor}) with Sly Deal` : `AI stole your ${stolenCard.name} (${stolenColor}) with Sly Deal`)
 
   const winner = checkWinCondition(s)
   if (winner) s = { ...s, turnPhase: { type: 'gameOver', winner } }
@@ -875,7 +929,7 @@ export function playForcedDeal(state: MonopolyDealState, cardId: string): Monopo
   const newPs = removeFromHand(ps, cardId)
   let s = setPlayer(state, p, newPs)
   s = { ...s, discardPile: [...s.discardPile, card], playsUsedThisTurn: state.playsUsedThisTurn + 1 }
-  s = addLog(s, p, 'Played Forced Deal')
+  s = addLog(s, p, p === 'player' ? 'You played Forced Deal' : 'AI played Forced Deal')
 
   // Offer JSN to defender
   const jsnState = tryOfferJSN(s, card, p)
@@ -937,7 +991,7 @@ export function completeForcedDeal(
 
   const remaining = 3 - s.playsUsedThisTurn
   s = { ...s, turnPhase: { type: 'play', playsRemaining: remaining } }
-  s = addLog(s, p, `Forced Deal: gave ${yourCard.name}, took ${theirCard.name}`)
+  s = addLog(s, p, p === 'player' ? `You swapped ${yourCard.name} for ${theirCard.name} with Forced Deal` : `AI swapped ${yourCard.name} for your ${theirCard.name} with Forced Deal`)
 
   const winner = checkWinCondition(s)
   if (winner) s = { ...s, turnPhase: { type: 'gameOver', winner } }
@@ -1004,7 +1058,7 @@ export function playDealBreaker(state: MonopolyDealState, cardId: string): Monop
   const newPs = removeFromHand(ps, cardId)
   let s = setPlayer(state, p, newPs)
   s = { ...s, discardPile: [...s.discardPile, card], playsUsedThisTurn: state.playsUsedThisTurn + 1 }
-  s = addLog(s, p, 'Played Deal Breaker!')
+  s = addLog(s, p, p === 'player' ? 'You played Deal Breaker!' : 'AI played Deal Breaker!')
 
   // Offer JSN to defender
   const jsnState = tryOfferJSN(s, card, p)
@@ -1040,7 +1094,7 @@ export function completeDealBreaker(state: MonopolyDealState, targetColor: Prope
 
   const remaining = 3 - s.playsUsedThisTurn
   s = { ...s, turnPhase: { type: 'play', playsRemaining: remaining } }
-  s = addLog(s, p, `Deal Breaker! Stole complete ${targetColor} set!`)
+  s = addLog(s, p, p === 'player' ? `Deal Breaker! You stole the complete ${targetColor} set!` : `AI stole your complete ${targetColor} set with Deal Breaker!`)
 
   const winner = checkWinCondition(s)
   if (winner) s = { ...s, turnPhase: { type: 'gameOver', winner } }
@@ -1101,7 +1155,7 @@ export function playJustSayNo(state: MonopolyDealState, jsnCardId: string): Mono
       },
     },
   }
-  s = addLog(s, decider, 'Played Just Say No!')
+  s = addLog(s, decider, decider === 'player' ? 'You played Just Say No!' : 'AI played Just Say No!')
   return s
 }
 
@@ -1129,6 +1183,19 @@ export function acceptJSNOutcome(state: MonopolyDealState): MonopolyDealState {
 
 function resolveActionAfterJSN(state: MonopolyDealState, action: PendingAction): MonopolyDealState {
   const p = action.sourcePlayer
+
+  // If this came from useJSNDuringPayment, reconstruct the debt directly
+  if (action.debtAmount != null && action.debtSource) {
+    const debt: DebtInfo = {
+      creditor: p,
+      debtor: opponent(p),
+      amount: action.debtAmount,
+      source: action.debtSource,
+      selectedPayment: [],
+    }
+    return { ...state, turnPhase: { type: 'awaitingPayment', debt } }
+  }
+
   const ps = getPlayer(state, p)
   const card = action.actionCard
 

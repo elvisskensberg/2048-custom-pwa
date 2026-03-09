@@ -42,6 +42,7 @@ import {
   getRelocatableWilds,
   getRelocatableBuildings,
   relocateBuildingOnField,
+  useJSNDuringPayment,
   type MonopolyDealState,
   type PlayerState,
   type PropertyGroup,
@@ -808,6 +809,122 @@ describe('gameEngine', () => {
       expect(payable).toHaveLength(2) // 1 bank + 1 field
       expect(payable.find((c) => c.id === 'm-5a')).toBeDefined()
       expect(payable.find((c) => c.id === 'p-brown-1')).toBeDefined()
+    })
+  })
+
+  describe('useJSNDuringPayment', () => {
+    it('blocks payment and returns to play when creditor has no JSN', () => {
+      const state = makeState({
+        currentTurn: 'ai',
+        playsUsedThisTurn: 1,
+        turnPhase: {
+          type: 'awaitingPayment',
+          debt: {
+            creditor: 'ai',
+            debtor: 'player',
+            amount: 5,
+            source: 'debtCollector',
+            selectedPayment: [],
+          },
+        },
+        player: { hand: [findCardById('a-jsn-1')], field: [], bank: [] },
+        ai: { hand: [], field: [], bank: [] },
+      })
+
+      const next = useJSNDuringPayment(state, 'a-jsn-1')
+
+      expect(next.turnPhase.type).toBe('play')
+      expect(next.player.hand).toHaveLength(0)
+      expect(next.discardPile.some((c) => c.id === 'a-jsn-1')).toBe(true)
+    })
+
+    it('starts JSN chain when creditor has JSN', () => {
+      const state = makeState({
+        currentTurn: 'ai',
+        playsUsedThisTurn: 1,
+        turnPhase: {
+          type: 'awaitingPayment',
+          debt: {
+            creditor: 'ai',
+            debtor: 'player',
+            amount: 5,
+            source: 'debtCollector',
+            selectedPayment: [],
+          },
+        },
+        player: { hand: [findCardById('a-jsn-1')], field: [], bank: [] },
+        ai: { hand: [findCardById('a-jsn-2')], field: [], bank: [] },
+      })
+
+      const next = useJSNDuringPayment(state, 'a-jsn-1')
+
+      expect(next.turnPhase.type).toBe('awaitingJSN')
+      if (next.turnPhase.type === 'awaitingJSN') {
+        expect(next.turnPhase.jsnChain.currentDecider).toBe('ai')
+        expect(next.turnPhase.jsnChain.chain).toHaveLength(1)
+        expect(next.turnPhase.jsnChain.originalAction.debtAmount).toBe(5)
+        expect(next.turnPhase.jsnChain.originalAction.debtSource).toBe('debtCollector')
+      }
+    })
+
+    it('JSN chain resolution recreates debt when action proceeds', () => {
+      const state = makeState({
+        currentTurn: 'ai',
+        playsUsedThisTurn: 1,
+        turnPhase: {
+          type: 'awaitingPayment',
+          debt: {
+            creditor: 'ai',
+            debtor: 'player',
+            amount: 5,
+            source: 'debtCollector',
+            selectedPayment: [],
+          },
+        },
+        player: { hand: [findCardById('a-jsn-1')], field: [], bank: [] },
+        ai: { hand: [findCardById('a-jsn-2')], field: [], bank: [] },
+      })
+
+      // Player uses JSN → starts chain
+      let s = useJSNDuringPayment(state, 'a-jsn-1')
+      expect(s.turnPhase.type).toBe('awaitingJSN')
+
+      // AI counters with JSN → chain length 2 (even = action proceeds)
+      s = playJustSayNo(s, 'a-jsn-2')
+      expect(s.turnPhase.type).toBe('awaitingJSN')
+
+      // Player accepts → action proceeds → back to awaitingPayment
+      s = acceptJSNOutcome(s)
+      expect(s.turnPhase.type).toBe('awaitingPayment')
+      if (s.turnPhase.type === 'awaitingPayment') {
+        expect(s.turnPhase.debt.amount).toBe(5)
+        expect(s.turnPhase.debt.source).toBe('debtCollector')
+      }
+    })
+
+    it('does nothing when phase is not awaitingPayment', () => {
+      const state = makeState({
+        turnPhase: { type: 'play', playsRemaining: 3 },
+        player: { hand: [findCardById('a-jsn-1')], field: [], bank: [] },
+      })
+
+      const next = useJSNDuringPayment(state, 'a-jsn-1')
+      expect(next).toBe(state)
+    })
+
+    it('money charges skip JSN modal and go straight to payment', () => {
+      // Debt Collector with opponent having JSN — should still go to awaitingPayment
+      const dcCard = findCardById('a-dc-1')
+      const state = makeState({
+        currentTurn: 'player',
+        turnPhase: { type: 'play', playsRemaining: 3 },
+        player: { hand: [dcCard], field: [], bank: [] },
+        ai: { hand: [findCardById('a-jsn-1')], field: [], bank: [findCardById('m-5a')] },
+      })
+
+      const next = playDebtCollector(state, 'a-dc-1')
+      // Should go directly to awaitingPayment (NOT awaitingJSN)
+      expect(next.turnPhase.type).toBe('awaitingPayment')
     })
   })
 
@@ -1659,6 +1776,642 @@ describe('gameEngine', () => {
       })
       const result = relocateBuildingOnField(state, house.id, 'railroad')
       expect(result).toBe(state) // unchanged
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // Complete set protection — Sly Deal, Forced Deal, Deal Breaker
+  // -------------------------------------------------------------------------
+
+  describe('Complete set protection', () => {
+    // -- getStealableProperties --
+
+    describe('getStealableProperties excludes complete sets', () => {
+      it('returns nothing when all sets are complete', () => {
+        const ps: PlayerState = {
+          hand: [], bank: [],
+          field: [
+            makeGroup('brown', ['p-brown-1', 'p-brown-2']),
+            makeGroup('darkBlue', ['p-db-1', 'p-db-2']),
+          ],
+        }
+        expect(getStealableProperties(ps)).toHaveLength(0)
+      })
+
+      it('returns only cards from incomplete sets when mix of complete and incomplete', () => {
+        const ps: PlayerState = {
+          hand: [], bank: [],
+          field: [
+            makeGroup('brown', ['p-brown-1', 'p-brown-2']),       // complete (2/2)
+            makeGroup('red', ['p-red-1', 'p-red-2']),              // incomplete (2/3)
+            makeGroup('lightBlue', ['p-lb-1', 'p-lb-2', 'p-lb-3']), // complete (3/3)
+          ],
+        }
+        const stealable = getStealableProperties(ps)
+        expect(stealable).toHaveLength(2)
+        expect(stealable.every((s) => s.groupColor === 'red')).toBe(true)
+      })
+
+      it('includes wilds in incomplete sets as stealable', () => {
+        const wild = findCardById('w-rainbow-1')
+        const ps: PlayerState = {
+          hand: [], bank: [],
+          field: [{
+            color: 'red',
+            cards: [findCardById('p-red-1'), wild],
+            buildings: [],
+          }],
+        }
+        const stealable = getStealableProperties(ps)
+        expect(stealable).toHaveLength(2)
+        expect(stealable.some((s) => s.card.id === wild.id)).toBe(true)
+      })
+    })
+
+    // -- canPlayCard validation for action cards --
+
+    describe('canPlayCard rejects action cards without valid targets', () => {
+      it('rejects Sly Deal when opponent has only complete sets', () => {
+        const card = findCardById('a-sly-1')
+        const state = makeState({
+          player: { hand: [card], field: [], bank: [] },
+          ai: {
+            hand: [],
+            field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])],
+            bank: [],
+          },
+        })
+        const result = canPlayCard(state, card.id)
+        expect(result.valid).toBe(false)
+        expect(result.reason).toContain('stealable')
+      })
+
+      it('allows Sly Deal when opponent has incomplete sets', () => {
+        const card = findCardById('a-sly-1')
+        const state = makeState({
+          player: { hand: [card], field: [], bank: [] },
+          ai: {
+            hand: [],
+            field: [makeGroup('red', ['p-red-1'])],
+            bank: [],
+          },
+        })
+        expect(canPlayCard(state, card.id).valid).toBe(true)
+      })
+
+      it('rejects Deal Breaker when opponent has no complete sets', () => {
+        const card = findCardById('a-db-1')
+        const state = makeState({
+          player: { hand: [card], field: [], bank: [] },
+          ai: {
+            hand: [],
+            field: [makeGroup('red', ['p-red-1', 'p-red-2'])],
+            bank: [],
+          },
+        })
+        const result = canPlayCard(state, card.id)
+        expect(result.valid).toBe(false)
+        expect(result.reason).toContain('complete sets')
+      })
+
+      it('allows Deal Breaker when opponent has a complete set', () => {
+        const card = findCardById('a-db-1')
+        const state = makeState({
+          player: { hand: [card], field: [], bank: [] },
+          ai: {
+            hand: [],
+            field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])],
+            bank: [],
+          },
+        })
+        expect(canPlayCard(state, card.id).valid).toBe(true)
+      })
+
+      it('rejects Forced Deal when player has only complete sets (nothing to give)', () => {
+        const card = findCardById('a-fd-1')
+        const state = makeState({
+          player: {
+            hand: [card],
+            field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])],
+            bank: [],
+          },
+          ai: {
+            hand: [],
+            field: [makeGroup('red', ['p-red-1'])],
+            bank: [],
+          },
+        })
+        const result = canPlayCard(state, card.id)
+        expect(result.valid).toBe(false)
+        expect(result.reason).toContain('properties')
+      })
+
+      it('rejects Forced Deal when opponent has only complete sets (nothing to take)', () => {
+        const card = findCardById('a-fd-1')
+        const state = makeState({
+          player: {
+            hand: [card],
+            field: [makeGroup('red', ['p-red-1'])],
+            bank: [],
+          },
+          ai: {
+            hand: [],
+            field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])],
+            bank: [],
+          },
+        })
+        const result = canPlayCard(state, card.id)
+        expect(result.valid).toBe(false)
+        expect(result.reason).toContain('properties')
+      })
+    })
+
+    // -- completeSlyDeal refuses to steal from complete sets --
+
+    describe('completeSlyDeal protects complete sets', () => {
+      it('cannot steal a card from a complete set', () => {
+        const state = makeState({
+          turnPhase: { type: 'awaitingSlyDealTarget' },
+          playsUsedThisTurn: 1,
+          ai: {
+            hand: [],
+            field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])], // complete
+            bank: [],
+          },
+          player: { hand: [], field: [], bank: [] },
+        })
+
+        const next = completeSlyDeal(state, 'p-brown-1')
+        // Should be unchanged — card is in a complete set
+        expect(next).toEqual(state)
+      })
+
+      it('can steal a card from an incomplete set next to a complete set', () => {
+        const state = makeState({
+          turnPhase: { type: 'awaitingSlyDealTarget' },
+          playsUsedThisTurn: 1,
+          ai: {
+            hand: [],
+            field: [
+              makeGroup('brown', ['p-brown-1', 'p-brown-2']), // complete
+              makeGroup('red', ['p-red-1']),                    // incomplete
+            ],
+            bank: [],
+          },
+          player: { hand: [], field: [], bank: [] },
+        })
+
+        const next = completeSlyDeal(state, 'p-red-1')
+        expect(next.player.field).toHaveLength(1)
+        expect(next.player.field[0].cards[0].id).toBe('p-red-1')
+        // Brown set is still intact
+        expect(next.ai.field).toHaveLength(1)
+        expect(next.ai.field[0].color).toBe('brown')
+        expect(next.ai.field[0].cards).toHaveLength(2)
+      })
+    })
+
+    // -- completeForcedDeal refuses to swap from complete sets --
+
+    describe('completeForcedDeal protects complete sets', () => {
+      it('cannot take a card from opponent complete set', () => {
+        const state = makeState({
+          turnPhase: { type: 'awaitingForcedDealSelect', phase: 'give' },
+          playsUsedThisTurn: 1,
+          player: {
+            hand: [],
+            field: [makeGroup('red', ['p-red-1'])],
+            bank: [],
+          },
+          ai: {
+            hand: [],
+            field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])], // complete
+            bank: [],
+          },
+        })
+
+        const next = completeForcedDeal(state, 'p-red-1', 'p-brown-1')
+        expect(next).toEqual(state)
+      })
+
+      it('cannot give a card from player complete set', () => {
+        const state = makeState({
+          turnPhase: { type: 'awaitingForcedDealSelect', phase: 'give' },
+          playsUsedThisTurn: 1,
+          player: {
+            hand: [],
+            field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])], // complete
+            bank: [],
+          },
+          ai: {
+            hand: [],
+            field: [makeGroup('red', ['p-red-1'])],
+            bank: [],
+          },
+        })
+
+        const next = completeForcedDeal(state, 'p-brown-1', 'p-red-1')
+        expect(next).toEqual(state)
+      })
+
+      it('allows swap between incomplete sets', () => {
+        const state = makeState({
+          turnPhase: { type: 'awaitingForcedDealSelect', phase: 'give' },
+          playsUsedThisTurn: 1,
+          player: {
+            hand: [],
+            field: [makeGroup('orange', ['p-ora-1'])],
+            bank: [],
+          },
+          ai: {
+            hand: [],
+            field: [makeGroup('red', ['p-red-1'])],
+            bank: [],
+          },
+        })
+
+        const next = completeForcedDeal(state, 'p-ora-1', 'p-red-1')
+        expect(next.player.field.some((g) => g.cards.some((c) => c.id === 'p-red-1'))).toBe(true)
+        expect(next.ai.field.some((g) => g.cards.some((c) => c.id === 'p-ora-1'))).toBe(true)
+        expectCardConservation(state, next)
+      })
+    })
+
+    // -- AI turn: action cards respect complete set protection --
+
+    describe('AI Sly Deal / Forced Deal from AI turn', () => {
+      it('Sly Deal does nothing when AI targets player complete set', () => {
+        const card = findCardById('a-sly-1')
+        const state = makeState({
+          currentTurn: 'ai',
+          ai: { hand: [card], field: [], bank: [] },
+          player: {
+            hand: [],
+            field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])], // complete
+            bank: [],
+          },
+        })
+
+        const next = playSlyDeal(state, card.id)
+        // No stealable targets → unchanged
+        expect(next).toEqual(state)
+      })
+
+      it('AI Sly Deal works when player has incomplete sets', () => {
+        const card = findCardById('a-sly-1')
+        const state = makeState({
+          currentTurn: 'ai',
+          ai: { hand: [card], field: [], bank: [] },
+          player: {
+            hand: [],
+            field: [makeGroup('red', ['p-red-1'])],
+            bank: [],
+          },
+        })
+
+        const next = playSlyDeal(state, card.id)
+        expect(next.turnPhase.type).toBe('awaitingSlyDealTarget')
+      })
+
+      it('AI Forced Deal does nothing when player has only complete sets', () => {
+        const card = findCardById('a-fd-1')
+        const state = makeState({
+          currentTurn: 'ai',
+          ai: { hand: [card], field: [makeGroup('red', ['p-red-1'])], bank: [] },
+          player: {
+            hand: [],
+            field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])],
+            bank: [],
+          },
+        })
+
+        const next = playForcedDeal(state, card.id)
+        expect(next).toEqual(state)
+      })
+    })
+
+    // -- Deal Breaker only targets complete sets --
+
+    describe('Deal Breaker targets only complete sets', () => {
+      it('cannot steal an incomplete set', () => {
+        const state = makeState({
+          turnPhase: { type: 'awaitingDealBreakerTarget' },
+          playsUsedThisTurn: 1,
+          ai: {
+            hand: [],
+            field: [makeGroup('red', ['p-red-1', 'p-red-2'])], // incomplete (2/3)
+            bank: [],
+          },
+          player: { hand: [], field: [], bank: [] },
+        })
+
+        const next = completeDealBreaker(state, 'red')
+        expect(next).toEqual(state)
+      })
+
+      it('steals only the targeted complete set, leaves other sets intact', () => {
+        const state = makeState({
+          turnPhase: { type: 'awaitingDealBreakerTarget' },
+          playsUsedThisTurn: 1,
+          ai: {
+            hand: [],
+            field: [
+              makeGroup('brown', ['p-brown-1', 'p-brown-2']),  // complete
+              makeGroup('red', ['p-red-1']),                     // incomplete
+            ],
+            bank: [],
+          },
+          player: { hand: [], field: [], bank: [] },
+        })
+
+        const next = completeDealBreaker(state, 'brown')
+        expect(next.player.field.some((g) => g.color === 'brown')).toBe(true)
+        // Incomplete red set stays with AI
+        expect(next.ai.field).toHaveLength(1)
+        expect(next.ai.field[0].color).toBe('red')
+        expectCardConservation(state, next)
+      })
+    })
+
+    // -- Complete set with wilds --
+
+    describe('Complete sets with wild cards', () => {
+      it('set with wild counts as complete and is protected from Sly Deal', () => {
+        const wild = findCardById('w-rd-yl-1')
+        const ps: PlayerState = {
+          hand: [], bank: [],
+          field: [{
+            color: 'brown',
+            cards: [findCardById('p-brown-1'), wild],
+            buildings: [],
+          }],
+        }
+        // Brown needs 2 — has 1 property + 1 wild = 2 = complete
+        expect(isCompleteSet(ps.field[0])).toBe(true)
+        expect(getStealableProperties(ps)).toHaveLength(0)
+      })
+
+      it('set with ONLY wilds (no real property) is NOT complete', () => {
+        const wild1 = findCardById('w-rainbow-1')
+        const wild2 = findCardById('w-rainbow-2')
+        const ps: PlayerState = {
+          hand: [], bank: [],
+          field: [{
+            color: 'brown',
+            cards: [wild1, wild2],
+            buildings: [],
+          }],
+        }
+        expect(isCompleteSet(ps.field[0])).toBe(false)
+        expect(getStealableProperties(ps)).toHaveLength(2)
+      })
+    })
+  })
+
+  describe('Stolen/transferred cards do not pile onto complete sets', () => {
+    it('Sly Deal: stolen wild creates new group instead of joining complete set', () => {
+      const rainbow = findCardById('w-rainbow-1')
+      const slyDeal = findCardById('a-sly-1')
+      const state = makeState({
+        currentTurn: 'player',
+        turnPhase: { type: 'awaitingSlyDealTarget' },
+        playsUsedThisTurn: 1,
+        player: {
+          hand: [],
+          bank: [],
+          field: [
+            // Already complete darkBlue set (2/2)
+            makeGroup('darkBlue', ['p-db-1', 'p-db-2']),
+          ],
+        },
+        ai: {
+          hand: [],
+          bank: [],
+          field: [{
+            // Incomplete green group (1/3) containing rainbow wild
+            color: 'green',
+            cards: [rainbow],
+            buildings: [],
+          }],
+        },
+        discardPile: [slyDeal],
+      })
+
+      // Steal the rainbow wild from AI's "green" group — stolenColor will be 'green'
+      const after = completeSlyDeal(state, rainbow.id)
+
+      // Player should have 2 groups: complete darkBlue + new green with stolen wild
+      expect(after.player.field).toHaveLength(2)
+      // Original complete set untouched
+      expect(after.player.field[0].color).toBe('darkBlue')
+      expect(after.player.field[0].cards).toHaveLength(2)
+      expect(isCompleteSet(after.player.field[0])).toBe(true)
+      // New group with the stolen rainbow wild
+      expect(after.player.field[1].color).toBe('green')
+      expect(after.player.field[1].cards).toHaveLength(1)
+      expect(after.player.field[1].cards[0].id).toBe('w-rainbow-1')
+    })
+
+    it('Sly Deal: stolen card of same color as complete set creates new group', () => {
+      const state = makeState({
+        currentTurn: 'player',
+        turnPhase: { type: 'awaitingSlyDealTarget' },
+        playsUsedThisTurn: 1,
+        player: {
+          hand: [],
+          bank: [],
+          field: [
+            // Already complete darkBlue set (2/2)
+            makeGroup('darkBlue', ['p-db-1', 'p-db-2']),
+          ],
+        },
+        ai: {
+          hand: [],
+          bank: [],
+          field: [{
+            // Incomplete darkBlue group with a wild
+            color: 'darkBlue',
+            cards: [findCardById('w-gr-db')],  // green/darkBlue wild
+            buildings: [],
+          }],
+        },
+        discardPile: [findCardById('a-sly-1')],
+      })
+
+      const after = completeSlyDeal(state, 'w-gr-db')
+
+      // Stolen card should NOT join the complete darkBlue set
+      const dbGroups = after.player.field.filter(g => g.color === 'darkBlue')
+      expect(dbGroups).toHaveLength(2)
+      expect(dbGroups[0].cards).toHaveLength(2) // original complete set
+      expect(dbGroups[1].cards).toHaveLength(1) // new group with stolen wild
+    })
+
+    it('Forced Deal: swapped card creates new group instead of joining complete set', () => {
+      const state = makeState({
+        currentTurn: 'player',
+        turnPhase: { type: 'awaitingForcedDealSelect', phase: 'give' },
+        playsUsedThisTurn: 1,
+        player: {
+          hand: [],
+          bank: [],
+          field: [
+            // Complete brown set (2/2)
+            makeGroup('brown', ['p-brown-1', 'p-brown-2']),
+            // Incomplete lightBlue set — will give one away
+            { color: 'lightBlue', cards: [findCardById('p-lb-1'), findCardById('p-lb-2')], buildings: [] },
+          ],
+        },
+        ai: {
+          hand: [],
+          bank: [],
+          field: [{
+            color: 'brown',
+            cards: [findCardById('w-br-lb')], // brown/lightBlue wild in brown group
+            buildings: [],
+          }],
+        },
+        discardPile: [findCardById('a-fd-1')],
+      })
+
+      // Give lb-1, take the wild (which is in AI's "brown" group)
+      const after = completeForcedDeal(state, 'p-lb-1', 'w-br-lb')
+
+      // Player should have 3 groups: complete brown, reduced lightBlue, new brown with the wild
+      const brownGroups = after.player.field.filter(g => g.color === 'brown')
+      expect(brownGroups).toHaveLength(2)
+      // Original complete set should be untouched
+      const completeBrown = brownGroups.find(g => g.cards.length === 2)
+      expect(completeBrown).toBeDefined()
+      expect(isCompleteSet(completeBrown!)).toBe(true)
+      // New group with the received wild
+      const newBrown = brownGroups.find(g => g.cards.length === 1)
+      expect(newBrown).toBeDefined()
+      expect(newBrown!.cards[0].id).toBe('w-br-lb')
+    })
+
+    it('Payment transfer: property paid as debt does not join creditor complete set', () => {
+      const state = makeState({
+        currentTurn: 'player',
+        playsUsedThisTurn: 1,
+        turnPhase: {
+          type: 'awaitingPayment',
+          debt: {
+            creditor: 'player',
+            debtor: 'ai',
+            amount: 3,
+            source: 'debtCollector',
+            selectedPayment: ['p-red-1'], // AI pays with a red property
+          },
+        },
+        player: {
+          hand: [],
+          bank: [],
+          field: [
+            // Player already has complete red set (3/3)
+            makeGroup('red', ['p-red-2', 'p-red-3', 'w-rd-yl-1']),
+          ],
+        },
+        ai: {
+          hand: [],
+          bank: [],
+          field: [{
+            color: 'red',
+            cards: [findCardById('p-red-1')],
+            buildings: [],
+          }],
+        },
+      })
+
+      const after = confirmPayment(state)
+
+      // Player should have 2 red groups, not 1 oversized group
+      const redGroups = after.player.field.filter(g => g.color === 'red')
+      expect(redGroups).toHaveLength(2)
+      // Original complete set untouched
+      const completeRed = redGroups.find(g => g.cards.length === 3)
+      expect(completeRed).toBeDefined()
+      expect(isCompleteSet(completeRed!)).toBe(true)
+    })
+
+    it('payment transfer to incomplete set of same color works normally', () => {
+      const state = makeState({
+        currentTurn: 'player',
+        playsUsedThisTurn: 1,
+        turnPhase: {
+          type: 'awaitingPayment',
+          debt: {
+            creditor: 'player',
+            debtor: 'ai',
+            amount: 3,
+            source: 'debtCollector',
+            selectedPayment: ['p-red-1'],
+          },
+        },
+        player: {
+          hand: [],
+          bank: [],
+          field: [
+            // Player has incomplete red set (1/3)
+            { color: 'red', cards: [findCardById('p-red-2')], buildings: [] },
+          ],
+        },
+        ai: {
+          hand: [],
+          bank: [],
+          field: [{
+            color: 'red',
+            cards: [findCardById('p-red-1')],
+            buildings: [],
+          }],
+        },
+      })
+
+      const after = confirmPayment(state)
+
+      // Should join existing incomplete group
+      const redGroups = after.player.field.filter(g => g.color === 'red')
+      expect(redGroups).toHaveLength(1)
+      expect(redGroups[0].cards).toHaveLength(2)
+    })
+
+    it('stolen wild completing a 3rd set triggers win', () => {
+      const rainbow = findCardById('w-rainbow-1')
+      const state = makeState({
+        currentTurn: 'player',
+        turnPhase: { type: 'awaitingSlyDealTarget' },
+        playsUsedThisTurn: 1,
+        player: {
+          hand: [],
+          bank: [],
+          field: [
+            makeGroup('darkBlue', ['p-db-1', 'p-db-2']),
+            makeGroup('brown', ['p-brown-1', 'p-brown-2']),
+            // Need 1 more card for lightBlue (3 needed)
+            { color: 'lightBlue', cards: [findCardById('p-lb-1'), findCardById('p-lb-2')], buildings: [] },
+          ],
+        },
+        ai: {
+          hand: [],
+          bank: [],
+          field: [{
+            color: 'lightBlue',
+            cards: [rainbow],
+            buildings: [],
+          }],
+        },
+        discardPile: [findCardById('a-sly-1')],
+      })
+
+      const after = completeSlyDeal(state, rainbow.id)
+
+      // Rainbow wild should join incomplete lightBlue (not pile onto complete darkBlue/brown)
+      const lbGroup = after.player.field.find(g => g.color === 'lightBlue')
+      expect(lbGroup).toBeDefined()
+      expect(lbGroup!.cards).toHaveLength(3)
+      expect(isCompleteSet(lbGroup!)).toBe(true)
+      expect(countCompleteSets(after.player)).toBe(3)
+      expect(after.turnPhase.type).toBe('gameOver')
     })
   })
 })

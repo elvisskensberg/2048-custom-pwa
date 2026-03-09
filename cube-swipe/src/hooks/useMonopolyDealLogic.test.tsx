@@ -15,6 +15,7 @@ import {
 import { useMonopolyDealLogic } from './useMonopolyDealLogic'
 import { getAIDecision } from '../monopoly-deal/aiStrategy'
 import { loadMonopolyState } from '../utils/monopolyStateSync'
+import { trackEvent } from '../analytics'
 
 vi.mock('../monopoly-deal/aiStrategy', () => ({
   getAIDecision: vi.fn((): AIDecision => ({ type: 'endTurn' })),
@@ -29,6 +30,10 @@ vi.mock('../utils/monopolyStateSync', () => ({
 vi.mock('../monopoly-deal/gameLogger', () => ({
   logState: vi.fn(),
   logAction: vi.fn(),
+}))
+
+vi.mock('../analytics', () => ({
+  trackEvent: vi.fn(),
 }))
 
 const ALL_CARDS: MonopolyCardData[] = [
@@ -714,6 +719,76 @@ describe('useMonopolyDealLogic', () => {
     expect(
       result.current.playerField.find((g) => g.color === 'brown')?.cards.some((c) => c.id === 'w-br-lb')
     ).toBe(true)
+  })
+
+  it('fires MD_GameStart analytics when starting a new game', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.3)
+    const { result } = renderHook(() => useMonopolyDealLogic())
+
+    act(() => {
+      result.current.startNewGame()
+    })
+
+    expect(vi.mocked(trackEvent)).toHaveBeenCalledWith('MD_GameStart', expect.objectContaining({
+      timestamp: expect.any(Number),
+    }))
+    expect(vi.mocked(trackEvent)).toHaveBeenCalledWith('MD_StateChange', expect.objectContaining({
+      turn: expect.any(String),
+      turnNumber: expect.any(Number),
+      phase: 'play',
+    }))
+    vi.spyOn(Math, 'random').mockRestore()
+  })
+
+  it('fires MD_GameResume analytics on successful resume', async () => {
+    const state = makeState({
+      currentTurn: 'player',
+      turnPhase: { type: 'play', playsRemaining: 3 },
+      turnNumber: 5,
+    })
+    vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
+
+    const { result } = renderHook(() => useMonopolyDealLogic())
+
+    await act(async () => {
+      expect(await result.current.resumeGame()).toBe(true)
+    })
+
+    expect(vi.mocked(trackEvent)).toHaveBeenCalledWith('MD_GameResume', { turnNumber: 5 })
+  })
+
+  it('playJSNDuringPayment blocks action when player uses JSN', async () => {
+    const state = makeState({
+      currentTurn: 'ai',
+      playsUsedThisTurn: 1,
+      turnPhase: {
+        type: 'awaitingPayment',
+        debt: {
+          creditor: 'ai',
+          debtor: 'player',
+          amount: 5,
+          source: 'debtCollector',
+          selectedPayment: [],
+        },
+      },
+      player: { hand: [card('a-jsn-1')], field: [], bank: [] },
+      ai: { hand: [], field: [], bank: [] },
+    })
+    vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
+
+    const { result } = renderHook(() => useMonopolyDealLogic())
+
+    await act(async () => {
+      expect(await result.current.resumeGame()).toBe(true)
+    })
+
+    act(() => {
+      result.current.playJSNDuringPayment('a-jsn-1')
+    })
+
+    expect(result.current.turnPhase.type).toBe('play')
+    expect(result.current.playerHand).toHaveLength(0)
+    expect(result.current.gameState?.discardPile.some((c) => c.id === 'a-jsn-1')).toBe(true)
   })
 
   it('selectForcedDealGive and selectForcedDealTake complete swap flow', async () => {

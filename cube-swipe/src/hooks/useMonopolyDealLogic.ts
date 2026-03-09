@@ -33,6 +33,7 @@ import {
   acceptJSNOutcome,
   togglePaymentCard as engineTogglePayment,
   confirmPayment as engineConfirmPayment,
+  useJSNDuringPayment as engineUseJSNDuringPayment,
   discardCards as engineDiscardCards,
   endPlayPhase,
   canPlayCard as engineCanPlayCard,
@@ -42,10 +43,12 @@ import {
   getRelocatableWilds,
   relocateBuildingOnField,
   getRelocatableBuildings,
+  isCompleteSet,
   serializeState,
   deserializeState,
 } from '../monopoly-deal/gameEngine'
 import { getAIDecision, type AIDecision } from '../monopoly-deal/aiStrategy'
+import { trackEvent } from '../analytics'
 import {
   saveMonopolyState,
   loadMonopolyState,
@@ -99,6 +102,7 @@ export interface UseMonopolyDealReturn {
   initiateBuildingRelocation: (buildingCardId: string) => void
   completeBuildingRelocation: (targetColor: PropertyColor) => void
   relocatableBuildings: { cardId: string; currentColor: PropertyColor; buildingName: string }[]
+  playJSNDuringPayment: (jsnCardId: string) => void
   discardCard: (cardId: string) => void
   endTurn: () => void
 
@@ -301,9 +305,35 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
   const log = gameState?.log ?? []
   const winner = gameState ? checkWinCondition(gameState) : null
 
+  // ── Analytics: track game over ──
+  useEffect(() => {
+    if (!winner || !gameState) return
+    trackEvent('MD_GameOver', {
+      winner,
+      turnNumber: gameState.turnNumber,
+      playerSets: gameState.player.field.filter((g) => isCompleteSet(g)).length,
+      aiSets: gameState.ai.field.filter((g) => isCompleteSet(g)).length,
+    })
+  }, [winner, gameState])
+
   // ── Helper: update state + check for AI turn ──
   const updateState = useCallback((newState: MonopolyDealState): void => {
     logState('STATE UPDATE', newState)
+    trackEvent('MD_StateChange', {
+      turn: newState.currentTurn,
+      turnNumber: newState.turnNumber,
+      phase: newState.turnPhase.type,
+      playsUsed: newState.playsUsedThisTurn,
+      playerHand: newState.player.hand.map((c) => c.id).join(','),
+      playerField: newState.player.field.map((g) => `${g.color}:${g.cards.map((c) => c.id).join('+')}${g.buildings.length ? `/${g.buildings.map((b) => b.id).join('+')}` : ''}`).join(';'),
+      playerBank: newState.player.bank.map((c) => c.id).join(','),
+      aiHandCount: newState.ai.hand.length,
+      aiField: newState.ai.field.map((g) => `${g.color}:${g.cards.map((c) => c.id).join('+')}${g.buildings.length ? `/${g.buildings.map((b) => b.id).join('+')}` : ''}`).join(';'),
+      aiBank: newState.ai.bank.map((c) => c.id).join(','),
+      drawPile: newState.drawPile.length,
+      discardPile: newState.discardPile.length,
+      lastLog: newState.log.length > 0 ? newState.log[newState.log.length - 1].action : '',
+    })
     setGameState(newState)
   }, [])
 
@@ -477,9 +507,19 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
 
     const phase = gameState.turnPhase
 
-    // AI must pay debt
+    // AI must pay debt — check if AI wants to use JSN first
     if (phase.type === 'awaitingPayment' && phase.debt.debtor === 'ai') {
       const timer = setTimeout(() => {
+        // Check if AI has JSN and should block
+        const aiJSN = gameState.ai.hand.find((c) => c.name === 'Just Say No')
+        if (aiJSN && phase.debt.amount >= 4) {
+          logAction('AI', 'using JSN to block payment', `debt=${phase.debt.amount}M`)
+          const s = engineUseJSNDuringPayment(gameState, aiJSN.id)
+          logState('AI used JSN during payment', s)
+          setGameState(s)
+          return
+        }
+
         logAction('AI', 'auto-pay debt (player turn)')
         const decision = getAIDecision({ ...gameState, currentTurn: 'ai' })
         if (decision.type === 'payDebt' && decision.paymentCardIds) {
@@ -533,6 +573,7 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
   // ── Game lifecycle ──
   const startNewGame = useCallback((): void => {
     logAction('Game', 'NEW GAME')
+    trackEvent('MD_GameStart', { timestamp: Date.now() })
     const state = createInitialState()
     // Auto-draw for player
     const s = executeDraw(state)
@@ -544,6 +585,7 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
     if (!saved) return false
     try {
       const state = deserializeState(saved)
+      trackEvent('MD_GameResume', { turnNumber: state.turnNumber })
       setGameState(state)
       return true
     } catch {
@@ -880,6 +922,13 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
     updateState(s)
   }, [gameState, updateState])
 
+  const playJSNDuringPayment = useCallback((jsnCardId: string): void => {
+    if (!gameState || gameState.turnPhase.type !== 'awaitingPayment') return
+    logAction('Player', 'JSN during payment', jsnCardId)
+    const s = engineUseJSNDuringPayment(gameState, jsnCardId)
+    updateState(s)
+  }, [gameState, updateState])
+
   const discardCard = useCallback((cardId: string): void => {
     if (!gameState || gameState.turnPhase.type !== 'discard') return
     const s = engineDiscardCards(gameState, [cardId])
@@ -932,6 +981,7 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
     initiateBuildingRelocation,
     completeBuildingRelocation,
     relocatableBuildings,
+    playJSNDuringPayment,
     discardCard,
     endTurn: endTurnFn,
     isAIThinking,
