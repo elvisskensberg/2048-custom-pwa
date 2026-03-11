@@ -208,8 +208,9 @@ export function executeDraw(state: MonopolyDealState): MonopolyDealState {
 
 export function isCompleteSet(group: PropertyGroup): boolean {
   if (group.cards.length < SET_SIZE[group.color]) return false
-  // A complete set must contain at least one standard (non-wild) property card
-  return group.cards.some((c) => c.type !== 'wild')
+  // A complete set must contain at least one non-rainbow card (property or dual-color wild).
+  // Dual-color wilds count as "real" cards for their placed color; only all-rainbow sets are rejected.
+  return group.cards.some((c) => c.type !== 'wild' || c.color != null)
 }
 
 export function countCompleteSets(ps: PlayerState): number {
@@ -808,6 +809,7 @@ export function confirmPayment(state: MonopolyDealState): MonopolyDealState {
   for (const { card, color } of transferToField) {
     newCreditor = addPropertyToField(newCreditor, card, color)
   }
+  newCreditor = mergeIncompleteGroups(newCreditor)
 
   let s = setPlayer(state, debtor, newDebtor)
   s = setPlayer(s, creditor, newCreditor)
@@ -838,6 +840,31 @@ function addPropertyToField(ps: PlayerState, card: MonopolyCardData, color: Prop
     return { ...ps, field: newField }
   }
   return { ...ps, field: [...ps.field, { color, cards: [card], buildings: [] }] }
+}
+
+/** Merge incomplete groups of the same color on a player's field. */
+function mergeIncompleteGroups(ps: PlayerState): PlayerState {
+  const merged: PropertyGroup[] = []
+  const seen = new Map<PropertyColor, number>() // color → index in merged[]
+  for (const group of ps.field) {
+    if (isCompleteSet(group)) {
+      merged.push(group)
+      continue
+    }
+    const existingIdx = seen.get(group.color)
+    if (existingIdx != null && !isCompleteSet(merged[existingIdx])) {
+      // Merge into existing incomplete group of same color
+      merged[existingIdx] = {
+        ...merged[existingIdx],
+        cards: [...merged[existingIdx].cards, ...group.cards],
+        buildings: [...merged[existingIdx].buildings, ...group.buildings],
+      }
+    } else {
+      seen.set(group.color, merged.length)
+      merged.push(group)
+    }
+  }
+  return { ...ps, field: merged }
 }
 
 // ---------------------------------------------------------------------------
@@ -903,7 +930,7 @@ export function completeSlyDeal(state: MonopolyDealState, targetCardId: string):
   let s = setPlayer(state, opp, newOpp)
 
   const myState = getPlayer(s, p)
-  const newMyState = addPropertyToField(myState, stolenCard, stolenColor)
+  const newMyState = mergeIncompleteGroups(addPropertyToField(myState, stolenCard, stolenColor))
   s = setPlayer(s, p, newMyState)
 
   const remaining = 3 - s.playsUsedThisTurn
@@ -982,9 +1009,9 @@ export function completeForcedDeal(
   myState = removeCardFromField(myState, yourCardId)
   oppState = removeCardFromField(oppState, theirCardId)
 
-  // Add swapped cards
-  myState = addPropertyToField(myState, theirCard, theirColor)
-  oppState = addPropertyToField(oppState, yourCard, yourColor)
+  // Add swapped cards, then merge any same-color incomplete groups
+  myState = mergeIncompleteGroups(addPropertyToField(myState, theirCard, theirColor))
+  oppState = mergeIncompleteGroups(addPropertyToField(oppState, yourCard, yourColor))
 
   let s = setPlayer(state, p, myState)
   s = setPlayer(s, opp, oppState)
@@ -1329,19 +1356,19 @@ export function relocateWildOnField(
     // Remove empty group (drop any orphaned buildings to bank)
     const orphanedBuildings = sourceGroup.buildings
     newField = newField.filter((_, i) => i !== sourceGroupIdx)
-    const newPs = { ...ps, field: newField, bank: [...ps.bank, ...orphanedBuildings] }
-    // Add to target group
-    const result = addPropertyToField(newPs, foundCard, newColor)
-    let s = setPlayer(state, p, result)
+    let newPs: PlayerState = { ...ps, field: newField, bank: [...ps.bank, ...orphanedBuildings] }
+    // Add to target group, then merge any same-color incomplete groups
+    newPs = mergeIncompleteGroups(addPropertyToField(newPs, foundCard, newColor))
+    let s = setPlayer(state, p, newPs)
     s = addLog(s, p, `Moved ${foundCard.name} from ${sourceGroup.color} to ${newColor}`)
     return s
   }
 
   newField[sourceGroupIdx] = { ...sourceGroup, cards: newSourceCards }
-  const newPs = { ...ps, field: newField }
-  // Add to target group
-  const result = addPropertyToField(newPs, foundCard, newColor)
-  let s = setPlayer(state, p, result)
+  let newPs: PlayerState = { ...ps, field: newField }
+  // Add to target group, then merge any same-color incomplete groups
+  newPs = mergeIncompleteGroups(addPropertyToField(newPs, foundCard, newColor))
+  let s = setPlayer(state, p, newPs)
   s = addLog(s, p, `Moved ${foundCard.name} from ${sourceGroup.color} to ${newColor}`)
   return s
 }

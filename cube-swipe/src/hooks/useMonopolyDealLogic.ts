@@ -105,6 +105,8 @@ export interface UseMonopolyDealReturn {
   playJSNDuringPayment: (jsnCardId: string) => void
   discardCard: (cardId: string) => void
   endTurn: () => void
+  undoEndTurn: () => void
+  canUndoEndTurn: boolean
 
   // AI
   isAIThinking: boolean
@@ -264,6 +266,7 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
   const [gameState, setGameState] = useState<MonopolyDealState | null>(null)
   const [isLoading] = useState(false)
   const [isAIThinking, setIsAIThinking] = useState(false)
+  const preEndTurnStateRef = useRef<MonopolyDealState | null>(null)
   const mountedRef = useRef(true)
   const aiRunningRef = useRef(false)
 
@@ -572,6 +575,7 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
 
   // ── Game lifecycle ──
   const startNewGame = useCallback((): void => {
+    preEndTurnStateRef.current = null
     logAction('Game', 'NEW GAME')
     trackEvent('MD_GameStart', { timestamp: Date.now() })
     const state = createInitialState()
@@ -938,10 +942,29 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
   const endTurnFn = useCallback((): void => {
     if (!gameState || gameState.currentTurn !== 'player') return
     if (gameState.turnPhase.type !== 'play') return
+    // Save snapshot so player can undo if they had plays remaining and hit hand limit
+    if (gameState.turnPhase.playsRemaining > 0) {
+      preEndTurnStateRef.current = gameState
+    } else {
+      preEndTurnStateRef.current = null
+    }
     logAction('Player', 'END TURN')
     const s = endPlayPhase(gameState)
     updateState(s)
   }, [gameState, updateState])
+
+  const undoEndTurnFn = useCallback((): void => {
+    if (!preEndTurnStateRef.current) return
+    logAction('Player', 'UNDO END TURN')
+    updateState(preEndTurnStateRef.current)
+    preEndTurnStateRef.current = null
+  }, [updateState])
+
+  const canUndoEndTurn = !!(
+    preEndTurnStateRef.current &&
+    gameState?.currentTurn === 'player' &&
+    gameState?.turnPhase.type === 'discard'
+  )
 
   return {
     gameState,
@@ -984,6 +1007,8 @@ export function useMonopolyDealLogic(): UseMonopolyDealReturn {
     playJSNDuringPayment,
     discardCard,
     endTurn: endTurnFn,
+    undoEndTurn: undoEndTurnFn,
+    canUndoEndTurn,
     isAIThinking,
   }
 }

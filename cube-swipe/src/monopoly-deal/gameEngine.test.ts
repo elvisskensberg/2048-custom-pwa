@@ -1606,7 +1606,7 @@ describe('gameEngine', () => {
       expect(isCompleteSet(group)).toBe(true)
     })
 
-    it('rejects a set of dual-color wilds only', () => {
+    it('accepts a set with dual-color wild + rainbow wilds', () => {
       const wild1 = WILD_CARDS.find((c) => c.id === 'w-gr-db')!
       const wild2 = WILD_CARDS.find((c) => c.id === 'w-rainbow-2')!
       const group: PropertyGroup = {
@@ -1614,7 +1614,8 @@ describe('gameEngine', () => {
         cards: [wild1, wild2, WILD_CARDS.find((c) => c.id === 'w-rainbow-1')!],
         buildings: [],
       }
-      expect(isCompleteSet(group)).toBe(false)
+      // Dual-color wild counts as a "real" card — set is complete
+      expect(isCompleteSet(group)).toBe(true)
     })
   })
 
@@ -2151,7 +2152,7 @@ describe('gameEngine', () => {
         expect(getStealableProperties(ps)).toHaveLength(0)
       })
 
-      it('set with ONLY wilds (no real property) is NOT complete', () => {
+      it('set with ONLY rainbow wilds is NOT complete', () => {
         const wild1 = findCardById('w-rainbow-1')
         const wild2 = findCardById('w-rainbow-2')
         const ps: PlayerState = {
@@ -2164,6 +2165,22 @@ describe('gameEngine', () => {
         }
         expect(isCompleteSet(ps.field[0])).toBe(false)
         expect(getStealableProperties(ps)).toHaveLength(2)
+      })
+
+      it('set with dual-color wild + rainbow wild IS complete', () => {
+        // green/darkBlue wild in darkBlue group + rainbow wild = complete (darkBlue needs 2)
+        const dualWild = findCardById('w-gr-db')
+        const rainbow = findCardById('w-rainbow-1')
+        const ps: PlayerState = {
+          hand: [], bank: [],
+          field: [{
+            color: 'darkBlue',
+            cards: [dualWild, rainbow],
+            buildings: [],
+          }],
+        }
+        expect(isCompleteSet(ps.field[0])).toBe(true)
+        expect(getStealableProperties(ps)).toHaveLength(0)
       })
     })
   })
@@ -2412,6 +2429,86 @@ describe('gameEngine', () => {
       expect(isCompleteSet(lbGroup!)).toBe(true)
       expect(countCompleteSets(after.player)).toBe(3)
       expect(after.turnPhase.type).toBe('gameOver')
+    })
+  })
+
+  describe('Same-color incomplete groups auto-merge', () => {
+    it('wild relocation merges same-color incomplete groups', () => {
+      // Player has: complete lightBlue (with rainbow wild) + lone stolen lightBlue card
+      const state = makeState({
+        currentTurn: 'player',
+        turnPhase: { type: 'play', playsRemaining: 3 },
+        playsUsedThisTurn: 0,
+        player: {
+          hand: [],
+          bank: [],
+          field: [
+            // Complete lightBlue set (3/3): 2 properties + 1 rainbow wild
+            {
+              color: 'lightBlue',
+              cards: [findCardById('p-lb-1'), findCardById('p-lb-2'), findCardById('w-rainbow-1')],
+              buildings: [],
+            },
+            // Lone stolen lightBlue card in separate group
+            {
+              color: 'lightBlue',
+              cards: [findCardById('p-lb-3')],
+              buildings: [],
+            },
+          ],
+        },
+      })
+
+      // Relocate rainbow wild from lightBlue → green
+      // This makes the first lightBlue group incomplete (2/3), triggering merge with the lone card
+      const after = relocateWildOnField(state, 'w-rainbow-1', 'green')
+
+      // Should now have 1 lightBlue group (merged: 3 cards = complete) + 1 green group
+      const lbGroups = after.player.field.filter(g => g.color === 'lightBlue')
+      expect(lbGroups).toHaveLength(1)
+      expect(lbGroups[0].cards).toHaveLength(3)
+      expect(isCompleteSet(lbGroups[0])).toBe(true)
+
+      const greenGroups = after.player.field.filter(g => g.color === 'green')
+      expect(greenGroups).toHaveLength(1)
+      expect(greenGroups[0].cards[0].id).toBe('w-rainbow-1')
+    })
+
+    it('Sly Deal auto-merges stolen card with existing incomplete group', () => {
+      const state = makeState({
+        currentTurn: 'player',
+        turnPhase: { type: 'awaitingSlyDealTarget' },
+        playsUsedThisTurn: 1,
+        player: {
+          hand: [],
+          bank: [],
+          field: [
+            // Complete red set
+            makeGroup('red', ['p-red-1', 'p-red-2', 'p-red-3']),
+            // Incomplete red group (from a previous steal that couldn't join complete set)
+            { color: 'red', cards: [findCardById('w-rd-yl-1')], buildings: [] },
+          ],
+        },
+        ai: {
+          hand: [],
+          bank: [],
+          field: [{
+            color: 'red',
+            cards: [findCardById('w-rd-yl-2')],
+            buildings: [],
+          }],
+        },
+        discardPile: [findCardById('a-sly-1')],
+      })
+
+      const after = completeSlyDeal(state, 'w-rd-yl-2')
+
+      // Stolen card should merge with existing incomplete red group, not create a 3rd
+      const redGroups = after.player.field.filter(g => g.color === 'red')
+      expect(redGroups).toHaveLength(2) // 1 complete + 1 merged incomplete
+      const incompleteRed = redGroups.find(g => g.cards.length < 3)
+      expect(incompleteRed).toBeDefined()
+      expect(incompleteRed!.cards).toHaveLength(2)
     })
   })
 })

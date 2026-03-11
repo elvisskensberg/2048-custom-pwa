@@ -829,4 +829,153 @@ describe('useMonopolyDealLogic', () => {
     expect(result.current.turnPhase).toEqual({ type: 'play', playsRemaining: 2 })
     expect(result.current.playerField.find((g) => g.color === 'red')?.cards[0].id).toBe('p-red-1')
   })
+
+  // ── Undo End Turn ──────────────────────────────────────────────────────────
+
+  it('canUndoEndTurn is false initially', async () => {
+    const state = makeState({
+      turnPhase: { type: 'play', playsRemaining: 3 },
+      player: { hand: [card('m-1a')], field: [], bank: [] },
+    })
+    vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
+
+    const { result } = renderHook(() => useMonopolyDealLogic())
+    await act(async () => {
+      expect(await result.current.resumeGame()).toBe(true)
+    })
+
+    expect(result.current.canUndoEndTurn).toBe(false)
+  })
+
+  it('allows undo when ending turn early with plays remaining triggers discard', async () => {
+    // 8 cards in hand → endTurn triggers discard (hand limit is 7)
+    const state = makeState({
+      turnPhase: { type: 'play', playsRemaining: 2 },
+      drawPile: [card('m-5a')],
+      player: {
+        hand: [
+          card('m-1a'), card('m-1b'), card('m-2a'), card('m-2b'),
+          card('m-3a'), card('m-3b'), card('m-4a'), card('m-4b'),
+        ],
+        field: [],
+        bank: [],
+      },
+    })
+    vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
+
+    const { result } = renderHook(() => useMonopolyDealLogic())
+    await act(async () => {
+      expect(await result.current.resumeGame()).toBe(true)
+    })
+
+    expect(result.current.turnPhase.type).toBe('play')
+    expect(result.current.canUndoEndTurn).toBe(false)
+
+    act(() => {
+      result.current.endTurn()
+    })
+
+    // Should be in discard phase with undo available
+    expect(result.current.turnPhase.type).toBe('discard')
+    expect(result.current.canUndoEndTurn).toBe(true)
+
+    // Undo → back to play phase with plays remaining
+    act(() => {
+      result.current.undoEndTurn()
+    })
+
+    expect(result.current.turnPhase).toEqual({ type: 'play', playsRemaining: 2 })
+    expect(result.current.playerHand).toHaveLength(8)
+    expect(result.current.canUndoEndTurn).toBe(false)
+  })
+
+  it('does not allow undo when ending turn with 0 plays remaining', async () => {
+    // 8 cards in hand, 0 plays remaining → discard but no undo
+    const state = makeState({
+      turnPhase: { type: 'play', playsRemaining: 0 },
+      drawPile: [card('m-5a')],
+      player: {
+        hand: [
+          card('m-1a'), card('m-1b'), card('m-2a'), card('m-2b'),
+          card('m-3a'), card('m-3b'), card('m-4a'), card('m-4b'),
+        ],
+        field: [],
+        bank: [],
+      },
+    })
+    vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
+
+    const { result } = renderHook(() => useMonopolyDealLogic())
+    await act(async () => {
+      expect(await result.current.resumeGame()).toBe(true)
+    })
+
+    act(() => {
+      result.current.endTurn()
+    })
+
+    expect(result.current.turnPhase.type).toBe('discard')
+    expect(result.current.canUndoEndTurn).toBe(false)
+  })
+
+  it('clears undo state when starting a new game', async () => {
+    const state = makeState({
+      turnPhase: { type: 'play', playsRemaining: 2 },
+      drawPile: [card('m-5a')],
+      player: {
+        hand: [
+          card('m-1a'), card('m-1b'), card('m-2a'), card('m-2b'),
+          card('m-3a'), card('m-3b'), card('m-4a'), card('m-4b'),
+        ],
+        field: [],
+        bank: [],
+      },
+    })
+    vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
+
+    const { result } = renderHook(() => useMonopolyDealLogic())
+    await act(async () => {
+      expect(await result.current.resumeGame()).toBe(true)
+    })
+
+    act(() => {
+      result.current.endTurn()
+    })
+    expect(result.current.canUndoEndTurn).toBe(true)
+
+    // Start new game → undo should clear
+    vi.spyOn(Math, 'random').mockReturnValue(0.3)
+    act(() => {
+      result.current.startNewGame()
+    })
+    expect(result.current.canUndoEndTurn).toBe(false)
+    vi.spyOn(Math, 'random').mockRestore()
+  })
+
+  it('does not allow undo when hand is at or below limit (no discard triggered)', async () => {
+    // 5 cards in hand, 1 play remaining → endTurn switches to AI turn, no discard
+    const state = makeState({
+      turnPhase: { type: 'play', playsRemaining: 1 },
+      drawPile: [card('m-5a'), card('m-4a'), card('m-3a'), card('m-2a')],
+      player: {
+        hand: [card('m-1a'), card('m-1b'), card('m-2b')],
+        field: [],
+        bank: [],
+      },
+      ai: { hand: [card('m-3b')], field: [], bank: [] },
+    })
+    vi.mocked(loadMonopolyState).mockResolvedValue(asSavedState(state))
+
+    const { result } = renderHook(() => useMonopolyDealLogic())
+    await act(async () => {
+      expect(await result.current.resumeGame()).toBe(true)
+    })
+
+    act(() => {
+      result.current.endTurn()
+    })
+
+    // Turn switched to AI (no discard), so canUndoEndTurn must be false
+    expect(result.current.canUndoEndTurn).toBe(false)
+  })
 })

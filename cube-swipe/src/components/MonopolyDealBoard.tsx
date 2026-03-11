@@ -76,6 +76,8 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
     playJSNDuringPayment,
     discardCard,
     endTurn,
+    undoEndTurn,
+    canUndoEndTurn,
     log,
   } = game
 
@@ -294,10 +296,34 @@ export function MonopolyDealBoard({ onBack }: MonopolyDealBoardProps): React.JSX
           </Box>
         )}
 
+        {/* Discard warning banner */}
+        {turnPhase.type === 'discard' && (
+          <Box sx={{ mx: 2, mt: 1, p: 1, bgcolor: 'error.main', color: 'error.contrastText', borderRadius: 1, textAlign: 'center' }}>
+            <Typography variant="body2" fontWeight={700}>
+              Hand limit exceeded! Tap {(turnPhase as { mustDiscard?: number }).mustDiscard ?? 1} card(s) to discard.
+            </Typography>
+            {canUndoEndTurn && (
+              <Button
+                variant="contained"
+                size="small"
+                sx={{ mt: 0.5, bgcolor: 'error.contrastText', color: 'error.main', '&:hover': { bgcolor: 'grey.200' } }}
+                onClick={undoEndTurn}
+              >
+                Undo End Turn (plays left)
+              </Button>
+            )}
+          </Box>
+        )}
+
         {/* Player hand */}
         <Divider sx={{ mt: 1 }}>
           <Typography variant="caption" sx={{ color: 'text.secondary', px: 1 }}>
             Your Hand ({playerHand.length})
+            {currentTurn === 'player' && turnPhase.type === 'play' && (
+              <Typography component="span" variant="caption" sx={{ ml: 1, color: 'primary.main', fontWeight: 700 }}>
+                — Plays: {turnPhase.playsRemaining}/3
+              </Typography>
+            )}
           </Typography>
         </Divider>
         <PlayerHand
@@ -640,12 +666,11 @@ function getStatusText(
 function getWildColors(state: MonopolyDealState, cardId: string): PropertyColor[] {
   const card = state.player.hand.find((c) => c.id === cardId)
   if (!card) return []
-  const completeSets = new Set(getCompleteSetColors(state.player))
   if (card.color && card.color2) {
-    return [card.color, card.color2].filter((c) => !completeSets.has(c))
+    return [card.color, card.color2]
   }
-  return (['brown', 'lightBlue', 'pink', 'orange', 'red', 'yellow', 'green', 'darkBlue', 'railroad', 'utility'] as PropertyColor[])
-    .filter((c) => !completeSets.has(c))
+  // Rainbow wild — offer all colors (complete sets still valid targets)
+  return ['brown', 'lightBlue', 'pink', 'orange', 'red', 'yellow', 'green', 'darkBlue', 'railroad', 'utility'] as PropertyColor[]
 }
 
 function getRentColors(state: MonopolyDealState, cardId: string): PropertyColor[] {
