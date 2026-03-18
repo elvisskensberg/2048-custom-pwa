@@ -810,9 +810,59 @@ describe('gameEngine', () => {
       expect(payable.find((c) => c.id === 'm-5a')).toBeDefined()
       expect(payable.find((c) => c.id === 'p-brown-1')).toBeDefined()
     })
+
+    it('excludes JSN in hand from payable cards (JSN in hand is a blocker, not money)', () => {
+      const ps: PlayerState = {
+        hand: [findCardById('a-jsn-1')],
+        bank: [findCardById('m-2a')],
+        field: [],
+      }
+      const payable = getPayableCards(ps)
+      expect(payable).toHaveLength(1)
+      expect(payable[0].id).toBe('m-2a')
+      expect(payable.find((c) => c.id === 'a-jsn-1')).toBeUndefined()
+    })
+
+    it('includes banked JSN as payable money (not as a blocker)', () => {
+      const jsnCard = findCardById('a-jsn-1')
+      const ps: PlayerState = {
+        hand: [],
+        bank: [jsnCard, findCardById('m-1a')],
+        field: [],
+      }
+      const payable = getPayableCards(ps)
+      expect(payable).toHaveLength(2)
+      expect(payable.find((c) => c.id === 'a-jsn-1')).toBeDefined()
+    })
   })
 
   describe('useJSNDuringPayment', () => {
+    it('rejects JSN from bank — banked JSN cannot be used as a blocker', () => {
+      const state = makeState({
+        currentTurn: 'ai',
+        playsUsedThisTurn: 1,
+        turnPhase: {
+          type: 'awaitingPayment',
+          debt: {
+            creditor: 'ai',
+            debtor: 'player',
+            amount: 5,
+            source: 'debtCollector',
+            selectedPayment: [],
+          },
+        },
+        player: { hand: [], field: [], bank: [findCardById('a-jsn-1')] },
+        ai: { hand: [], field: [], bank: [] },
+      })
+
+      const next = useJSNDuringPayment(state, 'a-jsn-1')
+
+      // State should be unchanged — banked JSN cannot block
+      expect(next.turnPhase.type).toBe('awaitingPayment')
+      expect(next.player.bank).toHaveLength(1)
+      expect(next.player.bank[0].id).toBe('a-jsn-1')
+    })
+
     it('blocks payment and returns to play when creditor has no JSN', () => {
       const state = makeState({
         currentTurn: 'ai',
@@ -936,6 +986,16 @@ describe('gameEngine', () => {
         field: [],
       }
       expect(getSelectedPaymentValue(ps, ['m-5a', 'm-2a'])).toBe(7)
+    })
+
+    it('does not count JSN in hand toward payment value', () => {
+      const ps: PlayerState = {
+        hand: [findCardById('a-jsn-1')], // JSN worth M4M but in hand
+        bank: [findCardById('m-2a')],
+        field: [],
+      }
+      // Even if someone passes the JSN id, getSelectedPaymentValue only looks at payable (bank+field)
+      expect(getSelectedPaymentValue(ps, ['a-jsn-1', 'm-2a'])).toBe(2)
     })
   })
 
