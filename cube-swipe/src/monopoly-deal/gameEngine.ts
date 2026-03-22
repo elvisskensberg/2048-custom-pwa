@@ -1033,45 +1033,6 @@ function removeCardFromField(ps: PlayerState, cardId: string): PlayerState {
   return { ...ps, field: newField }
 }
 
-function addGroupToField(ps: PlayerState, group: PropertyGroup): PlayerState {
-  const idx = ps.field.findIndex((g) => g.color === group.color)
-  if (idx < 0) {
-    return {
-      ...ps,
-      field: [
-        ...ps.field,
-        {
-          ...group,
-          cards: [...group.cards],
-          buildings: [...group.buildings],
-        },
-      ],
-    }
-  }
-
-  const existing = ps.field[idx]
-  // Merge buildings, but enforce max 1 House + 1 Hotel (no duplicates)
-  const allBuildings = [...existing.buildings, ...group.buildings]
-  const mergedBuildings: MonopolyCardData[] = []
-  const excessBuildings: MonopolyCardData[] = []
-  let hasHouse = false
-  let hasHotel = false
-  for (const b of allBuildings) {
-    if (b.name === 'House' && !hasHouse) { mergedBuildings.push(b); hasHouse = true }
-    else if (b.name === 'Hotel' && !hasHotel) { mergedBuildings.push(b); hasHotel = true }
-    else excessBuildings.push(b)
-  }
-
-  const newField = [...ps.field]
-  newField[idx] = {
-    ...existing,
-    cards: [...existing.cards, ...group.cards],
-    buildings: mergedBuildings,
-  }
-  // Excess duplicate buildings go to bank
-  return { ...ps, field: newField, bank: [...ps.bank, ...excessBuildings] }
-}
-
 /** Play Deal Breaker — transition to set selection (or JSN offer). */
 export function playDealBreaker(state: MonopolyDealState, cardId: string): MonopolyDealState {
   const p = state.currentTurn
@@ -1113,8 +1074,9 @@ export function completeDealBreaker(state: MonopolyDealState, targetColor: Prope
   oppState = { ...oppState, field: newOppField }
 
   let myState = getPlayer(state, p)
-  // Add the stolen group (all cards + buildings) to our field, merging same-color groups.
-  myState = addGroupToField(myState, stolenGroup)
+  // Add the stolen group as a SEPARATE group — do NOT merge with existing same-color cards.
+  // Merging would create oversized groups (e.g. 2 pink + 3 stolen pink = 5 cards).
+  myState = { ...myState, field: [...myState.field, { ...stolenGroup, cards: [...stolenGroup.cards], buildings: [...stolenGroup.buildings] }] }
 
   let s = setPlayer(state, p, myState)
   s = setPlayer(s, opp, oppState)

@@ -1407,7 +1407,7 @@ describe('gameEngine', () => {
       expectNoDuplicateCardIds(next)
     })
 
-    it('completeDealBreaker merges with existing same-color group', () => {
+    it('completeDealBreaker keeps stolen set separate from existing same-color group', () => {
       const myDarkBlue = { ...findCardById('p-db-1'), id: 'p-db-mine' }
       const oppDarkBlue1 = { ...findCardById('p-db-1'), id: 'p-db-opp-1' }
       const oppDarkBlue2 = { ...findCardById('p-db-2'), id: 'p-db-opp-2' }
@@ -1437,9 +1437,47 @@ describe('gameEngine', () => {
 
       const next = completeDealBreaker(state, 'darkBlue')
       const darkBlueGroups = next.player.field.filter((g) => g.color === 'darkBlue')
-      expect(darkBlueGroups).toHaveLength(1)
-      expect(darkBlueGroups[0].cards).toHaveLength(3)
-      expect(darkBlueGroups[0].buildings).toHaveLength(1)
+      // Stolen complete set stays as separate group — no merging
+      expect(darkBlueGroups).toHaveLength(2)
+      // Original incomplete group untouched
+      expect(darkBlueGroups[0].cards).toHaveLength(1)
+      expect(darkBlueGroups[0].cards[0].id).toBe('p-db-mine')
+      // Stolen group intact with buildings
+      expect(darkBlueGroups[1].cards).toHaveLength(2)
+      expect(darkBlueGroups[1].buildings).toHaveLength(1)
+      expect(next.ai.field).toHaveLength(0)
+      expectCardConservation(state, next)
+      expectNoDuplicateCardIds(next)
+    })
+
+    it('completeDealBreaker with pink: stolen 3-card set stays separate from existing 2 pink cards', () => {
+      const myPink1 = { ...findCardById('p-pink-1'), id: 'p-pink-mine-1' }
+      const myPink2 = { ...findCardById('p-pink-2'), id: 'p-pink-mine-2' }
+      const oppPink1 = { ...findCardById('p-pink-1'), id: 'p-pink-opp-1' }
+      const oppPink2 = { ...findCardById('p-pink-2'), id: 'p-pink-opp-2' }
+      const oppPink3 = { ...findCardById('p-pink-3'), id: 'p-pink-opp-3' }
+
+      const state = makeState({
+        turnPhase: { type: 'awaitingDealBreakerTarget' },
+        playsUsedThisTurn: 1,
+        player: {
+          hand: [],
+          field: [{ color: 'pink', cards: [myPink1, myPink2], buildings: [] }],
+          bank: [],
+        },
+        ai: {
+          hand: [],
+          field: [{ color: 'pink', cards: [oppPink1, oppPink2, oppPink3], buildings: [] }],
+          bank: [],
+        },
+      })
+
+      const next = completeDealBreaker(state, 'pink')
+      const pinkGroups = next.player.field.filter((g) => g.color === 'pink')
+      // Two separate pink groups, not one merged 5-card group
+      expect(pinkGroups).toHaveLength(2)
+      expect(pinkGroups[0].cards).toHaveLength(2)
+      expect(pinkGroups[1].cards).toHaveLength(3)
       expect(next.ai.field).toHaveLength(0)
       expectCardConservation(state, next)
       expectNoDuplicateCardIds(next)
