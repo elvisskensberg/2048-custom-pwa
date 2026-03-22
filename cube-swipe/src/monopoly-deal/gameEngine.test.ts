@@ -1482,6 +1482,162 @@ describe('gameEngine', () => {
       expectCardConservation(state, next)
       expectNoDuplicateCardIds(next)
     })
+
+    it('completeDealBreaker adds stolen set normally when no existing same-color group', () => {
+      const oppRed1 = { ...findCardById('p-red-1'), id: 'p-red-opp-1' }
+      const oppRed2 = { ...findCardById('p-red-2'), id: 'p-red-opp-2' }
+      const oppRed3 = { ...findCardById('p-red-3'), id: 'p-red-opp-3' }
+
+      const state = makeState({
+        turnPhase: { type: 'awaitingDealBreakerTarget' },
+        playsUsedThisTurn: 1,
+        player: {
+          hand: [],
+          field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])],
+          bank: [],
+        },
+        ai: {
+          hand: [],
+          field: [{ color: 'red', cards: [oppRed1, oppRed2, oppRed3], buildings: [] }],
+          bank: [],
+        },
+      })
+
+      const next = completeDealBreaker(state, 'red')
+      // Red group added to field alongside existing brown
+      expect(next.player.field).toHaveLength(2)
+      expect(next.player.field.find((g) => g.color === 'red')?.cards).toHaveLength(3)
+      expect(next.player.field.find((g) => g.color === 'brown')?.cards).toHaveLength(2)
+      expect(next.ai.field).toHaveLength(0)
+      expectCardConservation(state, next)
+    })
+
+    it('completeDealBreaker preserves buildings on stolen set kept separate', () => {
+      const myGreen = { ...findCardById('p-grn-1'), id: 'p-grn-mine' }
+      const oppGreen1 = { ...findCardById('p-grn-1'), id: 'p-grn-opp-1' }
+      const oppGreen2 = { ...findCardById('p-grn-2'), id: 'p-grn-opp-2' }
+      const oppGreen3 = { ...findCardById('p-grn-3'), id: 'p-grn-opp-3' }
+      const house = { ...findCardById('b-house-1'), id: 'b-house-stolen' }
+      const hotel = { ...findCardById('b-hotel-1'), id: 'b-hotel-stolen' }
+
+      const state = makeState({
+        turnPhase: { type: 'awaitingDealBreakerTarget' },
+        playsUsedThisTurn: 1,
+        player: {
+          hand: [],
+          field: [{ color: 'green', cards: [myGreen], buildings: [] }],
+          bank: [],
+        },
+        ai: {
+          hand: [],
+          field: [{ color: 'green', cards: [oppGreen1, oppGreen2, oppGreen3], buildings: [house, hotel] }],
+          bank: [],
+        },
+      })
+
+      const next = completeDealBreaker(state, 'green')
+      const greenGroups = next.player.field.filter((g) => g.color === 'green')
+      expect(greenGroups).toHaveLength(2)
+      // Original group has no buildings
+      expect(greenGroups[0].buildings).toHaveLength(0)
+      // Stolen group keeps both house and hotel
+      expect(greenGroups[1].buildings).toHaveLength(2)
+      expect(greenGroups[1].buildings.map((b) => b.name)).toContain('House')
+      expect(greenGroups[1].buildings.map((b) => b.name)).toContain('Hotel')
+      expectCardConservation(state, next)
+    })
+
+    it('completeDealBreaker triggers win when stolen set is the 3rd complete set', () => {
+      const state = makeState({
+        turnPhase: { type: 'awaitingDealBreakerTarget' },
+        playsUsedThisTurn: 1,
+        player: {
+          hand: [],
+          field: [
+            makeGroup('brown', ['p-brown-1', 'p-brown-2']),
+            makeGroup('darkBlue', ['p-db-1', 'p-db-2']),
+          ],
+          bank: [],
+        },
+        ai: {
+          hand: [],
+          field: [makeGroup('utility', ['p-util-1', 'p-util-2'])],
+          bank: [],
+        },
+      })
+
+      const next = completeDealBreaker(state, 'utility')
+      expect(next.turnPhase.type).toBe('gameOver')
+      expect((next.turnPhase as { winner: string }).winner).toBe('player')
+    })
+
+    it('completeDealBreaker does not mutate original stolen group', () => {
+      const oppBrown1 = { ...findCardById('p-brown-1'), id: 'p-brown-opp-1' }
+      const oppBrown2 = { ...findCardById('p-brown-2'), id: 'p-brown-opp-2' }
+      const stolenGroupCards = [oppBrown1, oppBrown2]
+      const house = findCardById('b-house-1')
+
+      const state = makeState({
+        turnPhase: { type: 'awaitingDealBreakerTarget' },
+        playsUsedThisTurn: 1,
+        player: { hand: [], field: [], bank: [] },
+        ai: {
+          hand: [],
+          field: [{ color: 'brown', cards: stolenGroupCards, buildings: [house] }],
+          bank: [],
+        },
+      })
+
+      const next = completeDealBreaker(state, 'brown')
+      // Modifying the result should not affect the original state
+      next.player.field[0].cards.push(findCardById('p-brown-1'))
+      expect(state.ai.field[0].cards).toHaveLength(2)
+      expect(stolenGroupCards).toHaveLength(2)
+    })
+
+    it('completeDealBreaker only steals from opponent, leaves other opponent groups intact', () => {
+      const state = makeState({
+        turnPhase: { type: 'awaitingDealBreakerTarget' },
+        playsUsedThisTurn: 1,
+        player: { hand: [], field: [], bank: [] },
+        ai: {
+          hand: [],
+          field: [
+            makeGroup('brown', ['p-brown-1', 'p-brown-2']),
+            makeGroup('red', ['p-red-1', 'p-red-2', 'p-red-3']),
+            makeGroup('utility', ['p-util-1', 'p-util-2']),
+          ],
+          bank: [],
+        },
+      })
+
+      const next = completeDealBreaker(state, 'red')
+      // Player gets red
+      expect(next.player.field).toHaveLength(1)
+      expect(next.player.field[0].color).toBe('red')
+      // AI keeps brown and utility
+      expect(next.ai.field).toHaveLength(2)
+      expect(next.ai.field.map((g) => g.color)).toContain('brown')
+      expect(next.ai.field.map((g) => g.color)).toContain('utility')
+      expectCardConservation(state, next)
+    })
+
+    it('completeDealBreaker resumes play phase with correct remaining plays', () => {
+      const state = makeState({
+        turnPhase: { type: 'awaitingDealBreakerTarget' },
+        playsUsedThisTurn: 2,
+        player: { hand: [], field: [], bank: [] },
+        ai: {
+          hand: [],
+          field: [makeGroup('brown', ['p-brown-1', 'p-brown-2'])],
+          bank: [],
+        },
+      })
+
+      const next = completeDealBreaker(state, 'brown')
+      expect(next.turnPhase.type).toBe('play')
+      expect((next.turnPhase as { playsRemaining: number }).playsRemaining).toBe(1)
+    })
   })
 
   // -------------------------------------------------------------------------
