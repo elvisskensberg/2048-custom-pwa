@@ -23,14 +23,14 @@
     "@emotion/styled": "^11.14.1",
     "@microsoft/applicationinsights-react-js": "^19.3.8",
     "@microsoft/applicationinsights-web": "^3.3.11",
-    "@mui/icons-material": "^7.3.7",
+    "@mui/icons-material": "^7.3.9",
     "@mui/material": "^7.3.7",
     "@react-spring/web": "^10.0.3",
     "@use-gesture/react": "^10.3.1",
-    "pdfkit": "^0.17.2",
+    "pdfkit": "^0.18.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "zustand": "^5.0.11"
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
